@@ -16,7 +16,7 @@ const TAU = Math.PI * 2;
 const fract = (x) => x - Math.floor(x);
 const h3 = (x, y, z) => fract(Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453);
 const sm = (t) => t * t * (3 - 2 * t);
-export function noise3(x, y, z) {
+function noise3(x, y, z) {
   const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z), u = sm(x - i), v = sm(y - j), w = sm(z - k);
   const L = (a, b, c) => h3(i + a, j + b, k + c);
   const x00 = L(0, 0, 0) + (L(1, 0, 0) - L(0, 0, 0)) * u, x10 = L(0, 1, 0) + (L(1, 1, 0) - L(0, 1, 0)) * u;

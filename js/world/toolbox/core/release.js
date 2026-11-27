@@ -13,7 +13,6 @@ import * as THREE from '../../../../vendor/three.js';
 let enabled = false;
 export const releaseStats = { geometries: 0, bytes: 0 };
 export function setGeometryRelease(on) { enabled = !!on; }
-export function geometryReleaseOn() { return enabled; }
 
 function drop() {
   if (!this.array) return;

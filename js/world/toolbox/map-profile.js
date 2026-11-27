@@ -57,7 +57,7 @@ export const PROFILE_PRESETS = {
   city: { light: 'free', roads: 'city', ground: 'plain', life: 'none', dressing: 'city', season: 'summer', clouds: 0.35, verge: '#7b8556',
     buildingStyles: PITTSBURGH_STYLES, hideInWater: false, classifyHomes: null, softCover: true },
 };
-export const DEFAULT_PROFILE = 'upstate';
+const DEFAULT_PROFILE = 'upstate';
 export { PITTSBURGH_STYLES };
 
 /** The resolved profile of a graph map's JSON (always a full object; unknown keys are kept for new kits). */

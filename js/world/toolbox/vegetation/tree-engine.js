@@ -40,7 +40,7 @@ const BANDS = { low: [55, 150], balanced: [100, 210], high: [130, 280] };
 // the camera, always on this branch, every tree-engine map): every tree is its photographed card at any distance (the
 // near and mid 3D tiers unused); the shrubs too (user: "shrubs need the same 2D"), within their own reach. Sharper
 // photos for the close-up cards.
-export const TREES_2D = true;
+const TREES_2D = true;
 /**
  * The hero woods' colour grade (Camillus Forest, user 24 Nov: "tree tops lighting … not quite right" → "Even, rich
  * gold", "Shaded below, sunlit tops", bushes "mute colours"): a crown's bleached, sun-facing photo held to the same
@@ -84,7 +84,7 @@ const STEP = 2.5;        // m: the camera moves this far between re-sorts (or tu
 // (a hash of the position on a 25 cm grid, small numbers only: the GPU's float maths gives the same answer for the
 // instanced trees, whose position comes out of their matrices, and the impostors, whose position is an attribute)
 const fr = (v) => v - Math.floor(v);
-export const treeJitter = (x, z) => {
+const treeJitter = (x, z) => {
   const qx = Math.floor(x * 4 + .5), qz = Math.floor(z * 4 + .5);
   let a = fr(qx * .1031), b = fr(qz * .1031), c = fr(qx * .1031);
   const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33); a += d; b += d; c += d;

@@ -72,7 +72,7 @@ function arcs(st) {
   return a;
 }
 /** Point on a street at arc length s: {x, y, z, i (segment), dx, dz}. */
-export function streetPoint(st, s) {
+function streetPoint(st, s) {
   const acc = arcs(st), P = st.pts, n = P.length;
   s = Math.max(0, Math.min(acc[n - 1], s));
   let lo = 0, hi = n - 1;
@@ -535,7 +535,6 @@ export function* planJunctionsJob(streets, ctx, options = {}) {
 }
 
 /** Recompute every junction's drawn surface heights after later passes moved street heights (cityStreets). */
-export function junctionTops(...args) { return drain(junctionTopsJob(...args)); }
 /** junctionTops as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* junctionTopsJob(plan, streets, routeDist, roadWidth = 7) {
   const onRoad = plan.roadCap || roadCap(routeDist, roadWidth, plan.options);
@@ -608,9 +607,8 @@ function surfaceTops(jn, streets, O, onRoad) {
 }
 
 /** Mitre the ends of streets that meet end to end (exactly two street ends at a node, no third street through it). */
-export function mitreLinks(...args) { return drain(mitreLinksJob(...args)); }
 /** mitreLinks as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
-export function* mitreLinksJob(streets) {
+function* mitreLinksJob(streets) {
   const at = new Map();
   yield* each(streets, (st, k) => {
     if (!st.pts || st.pts.length < 2 || st.cls > 7) return;

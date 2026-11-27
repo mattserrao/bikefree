@@ -42,7 +42,7 @@ import * as THREE from '../../../../vendor/three.js';
 import { patchShader, anchor } from '../core/shader-patch.js';   // [review 27 Nov]
 import { CANOPY, CANOPY_GLSL } from './canopy-shade.js';
 
-export const BAKE_DEFAULTS = {
+const BAKE_DEFAULTS = {
   cellM: 2.5,           // texel size of the baked maps (m)
   marginM: 500,         // baked area: the route's bounding box plus this
   reachM: 2500,         // how far up-sun occluders are gathered (m); towers 300 m tall at 7° reach ~2.4 km
@@ -180,7 +180,7 @@ const TAPS = new Map([[COMBINE, 2], [ERODE, 4], [DILATE, 4], [SWEEP, 2], [SUN, 2
  * doesn't wait in Chrome: it only flushes.) A 1-pixel read from a tiny target of our own does: the
  * read can't return before the work queued ahead of it. Only the read binding is touched, and restored.
  */
-export function gpuSync(renderer) {
+function gpuSync(renderer) {
   const gl = renderer.getContext(), t = performance.now();
   let s = gpuSync.cache.get(gl);
   if (!s) {

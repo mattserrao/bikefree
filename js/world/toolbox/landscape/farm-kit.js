@@ -81,7 +81,6 @@ export function* cropCardsJob(x0, z0, size, crop, groundH, out) {
   let r = it.next(); while (!r.done) { if (due()) yield; r = it.next(); }
   out.geo = r.value;
 }
-export function cropCards(x0, z0, size, crop, groundH) { const it = cropCardsGen(x0, z0, size, crop, groundH); let r = it.next(); while (!r.done) r = it.next(); return r.value; }
 function* cropCardsGen(x0, z0, size, crop, groundH) {
   const pos = [], uv = [], nrm = [];
   const seen = new Map();

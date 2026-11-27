@@ -65,7 +65,7 @@ export function planHouse(R) {
 }
 
 /** A volume's rectangle in world space (the kit's rect format). */
-export function volRect(P, v) {
+function volRect(P, v) {
   const sc = (v.s0 + v.s1) / 2, tc = (v.t0 + v.t1) / 2, cx = P.o[0] + P.a[0] * sc + P.b[0] * tc, cz = P.o[1] + P.a[1] * sc + P.b[1] * tc;
   const hs = (v.s1 - v.s0) / 2, ht = (v.t1 - v.t0) / 2;
   let ux, uz, hu, hv;

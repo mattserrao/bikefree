@@ -47,7 +47,7 @@ export function undergroundAt(route, s) {
 }
 
 /** [7.8] Is outbound metre s on a deck a structure draws (a stadium's escalator, concourse or ramp: city data `routeDecks`)? */
-export function deckAt(route, s) {
+function deckAt(route, s) {
   const ranges = route?.scene?.city?.routeDecks;
   if (!ranges?.length) return false;
   for (const g of ranges) if (s > g.fromM && s < g.toM) return true;

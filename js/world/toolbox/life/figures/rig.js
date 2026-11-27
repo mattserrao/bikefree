@@ -11,7 +11,7 @@ import * as THREE from '../../../../../vendor/three.js';
 export const FRAMES = 24;   // keyframes per clip (one loop); the shader interpolates between them
 
 // person rig (adult, height scale 1 = about 1.76 m to the top of the head); bike bones ride along for cyclists
-export const BONE = {
+const BONE = {
   ROOT: 0, PELVIS: 1, CHEST: 2, HEAD: 3, L_UPPER: 4, L_FORE: 5, R_UPPER: 6, R_FORE: 7,
   L_THIGH: 8, L_SHIN: 9, L_FOOT: 10, R_THIGH: 11, R_SHIN: 12, R_FOOT: 13, BIKE_FRONT: 14, BIKE_REAR: 15, CRANK: 16,
 };
@@ -26,8 +26,7 @@ export const PERSON = {
   ],
 };
 // dog rig (a medium dog, shares the texture's columns: bones 0–7)
-export const DOG_BONE = { ROOT: 0, BODY: 1, HEAD: 2, TAIL: 3, FL: 4, FR: 5, BL: 6, BR: 7 };
-export const DOG = {
+const DOG = {
   parent: [-1, 0, 1, 1, 1, 1, 1, 1],
   pivot: [[0, 0, 0], [0, .42, 0], [0, .50, .25], [0, .49, -.27], [.075, .37, .19], [-.075, .37, .19], [.075, .37, -.19], [-.075, .37, -.19]],
 };

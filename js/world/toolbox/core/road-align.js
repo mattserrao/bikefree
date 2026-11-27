@@ -33,7 +33,7 @@
 // Scene keys: "roadAlign": { "curve": true, "streets": true, "turns": { "minRadiusM": 8 }, "maxGrade": 0.3, … }
 // (defaults in STREET_DEFAULTS and TURN_DEFAULTS).
 
-import { drain, each, mapJob, mapGen, due } from './jobs.js';   // [F30] street profiles run as a job (in frame slices on the ride)
+import { each, mapJob, mapGen, due } from './jobs.js';   // [F30] street profiles run as a job (in frame slices on the ride)
 import { ghostMask } from './ghost.js';   // [pittsburgh-network] no eased turn across a ghost
 /** Is the curved centre line on for this route? (`turns` implies it.) */
 // (a road-graph map's base line — PGH, CNY, SKAN: its ways are drawn as Catmull-Rom curves through their 10 m samples
@@ -41,7 +41,7 @@ import { ghostMask } from './ghost.js';   // [pittsburgh-network] no eased turn 
 //  each bend off the tread and the heading snapped at every sample — "the bike is sliding", user 24 Nov)
 export const curveOn = (route) => !!(route.scene?.roadAlign?.curve || route.scene?.roadAlign?.turns || route.graph);
 
-export const TURN_DEFAULTS = {
+const TURN_DEFAULTS = {
   minRadiusM: 8,     // the centre line is eased until it turns no tighter than this…
   maxShiftM: 6,      // …moving no point further than this from the curve through the GPX samples
   marginM: 40,       // each eased stretch reaches this far past the too-tight part (the easing never meets its ends)
@@ -58,7 +58,7 @@ export function turnOptions(route) {
 }
 
 /** Radius (m) of the circle through three points (Infinity when straight). */
-export function circumRadius(ax, az, bx, bz, cx, cz) {
+function circumRadius(ax, az, bx, bz, cx, cz) {
   const cross = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
   if (Math.abs(cross) < 1e-12) return Infinity;
   return (Math.hypot(bx - ax, bz - az) * Math.hypot(cx - bx, cz - bz) * Math.hypot(cx - ax, cz - az)) / (2 * Math.abs(cross));
@@ -224,7 +224,7 @@ export function smoothTurns(route, xs, zs, o = TURN_DEFAULTS) {
 }
 
 /** Unit tangent of the curve between samples i and i+1 at fraction f: {x, z}. */
-export function curveTangent(index, i, f) {
+function curveTangent(index, i, f) {
   let d;
   const hit = index.turns && turnWindow(index, i, f);   // [smooth-turns]
   if (hit) {
@@ -404,7 +404,7 @@ export function apronFades(route, index, n, { roadWidth = 7, fadeM = 50, widthAt
 const ghostOf = (route, s) => (route.scene?.city?.routeGhosts || []).some((g) => s > g.fromM + .5 && s < g.toM - .5);
 
 // ---------------------------------------------------------------- street profiles
-export const STREET_DEFAULTS = {
+const STREET_DEFAULTS = {
   smoothM: 9,          // σ of the along-street smoothing (m)
   maxGrade: .3,        // steepest street grade (Pittsburgh's steepest real streets are ~30 %)
   maxGradeChange: .02, // grade change per metre of street (crest/sag radius ≥ 50 m)
@@ -419,7 +419,6 @@ export const STREET_DEFAULTS = {
  * streets (OSM node positions). `options.ground(x, z)`: the bare ground under a street (default: the heights
  * given); `options.floor`: lowest height of a ground street (e.g. just over the water); `options.nearRoute(x, z)`: 1 where the route's own bank decides the ground, falling to 0 away from it. Returns the junction list (also stored as streets.junctions).
  */
-export function alignStreetProfiles(...args) { return drain(alignStreetProfilesJob(...args)); }
 /** alignStreetProfiles as a job (js/world/toolbox/core/jobs.js): pauses between streets when its slice is used up. */
 export function* alignStreetProfilesJob(streets, options = {}) {
   const o = { ...STREET_DEFAULTS, ...options };
@@ -543,7 +542,6 @@ export function* alignStreetProfilesJob(streets, options = {}) {
 
 /** After a later pass pins some street points (e.g. kept under the route's road), give every other ground street
  *  through the same junction node the same height, so a junction never splits into two levels. */
-export function syncPinnedNodes(...args) { return drain(syncPinnedNodesJob(...args)); }
 export function* syncPinnedNodesJob(streets) {
   const key = (p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`, pinned = new Map();
   for (const st of streets) { if (!st.bridge) for (const p of st.pts) if (p.pin) pinned.set(key(p), Math.min(pinned.get(key(p)) ?? Infinity, p.y)); if (due()) yield; }
@@ -551,8 +549,7 @@ export function* syncPinnedNodesJob(streets) {
 }
 
 /** Grade, grade-change and deviation limits on one profile (in place; `fixed` samples never move). */
-export function limitProfile(...args) { return drain(limitProfileJob(...args)); }
-export function* limitProfileJob(y, s, fixed, ground, o = STREET_DEFAULTS) {
+function* limitProfileJob(y, s, fixed, ground, o = STREET_DEFAULTS) {
   const n = y.length;
   for (let it = 0; it < 40; it++) {
     if (due()) yield;
@@ -606,15 +603,3 @@ export function* limitProfileJob(y, s, fixed, ground, o = STREET_DEFAULTS) {
 }
 
 // ---------------------------------------------------------------- metrics (QC and the alignment report)
-/** Turn rate of a polyline at each interior vertex, degrees per metre. */
-export function turnRates(pts) {
-  const out = [];
-  for (let i = 1; i + 1 < pts.length; i++) {
-    const a = pts[i - 1], b = pts[i], c = pts[i + 1];
-    const l1 = Math.hypot(b.x - a.x, b.z - a.z), l2 = Math.hypot(c.x - b.x, c.z - b.z);
-    if (l1 < .05 || l2 < .05) { out.push(0); continue; }
-    const t = ((Math.atan2(c.z - b.z, c.x - b.x) - Math.atan2(b.z - a.z, b.x - a.x)) * 180 / Math.PI + 540) % 360 - 180;
-    out.push(t / ((l1 + l2) / 2));
-  }
-  return out;
-}

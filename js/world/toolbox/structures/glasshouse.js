@@ -20,7 +20,7 @@ import { Builder, M, cyl, cone, blob, box, withSmooth } from '../core/model-buil
 import { randomSequence, smoothstep, vnoise } from '../core/random.js';
 import { nightGlowShader, withNightGlow } from '../materials/night-glow.js';   // [review 27 Nov] the shared night glow
 import { ghostMask } from '../core/ghost.js';
-import { drain, due } from '../core/jobs.js';
+import { due } from '../core/jobs.js';
 import { figureMaterial, staticCrowdMesh, randomLook, CLIP } from '../life/figures/people.js';
 import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
@@ -345,7 +345,6 @@ function waterMaterial(uTime) {
 
 // ---------------------------------------------------------------- the build
 /** Build every glasshouse in the city's scene: meshes into city.group; returns { frames, meshes }. */
-export function buildGlasshouses(city) { return drain(buildGlasshousesJob(city)); }
 /** buildGlasshouses as a job (PLAN F30: an area builds in frame slices on the ride). */
 export function* buildGlasshousesJob(city) {
   const scene = city.route.scene || {}, specs = scene.glasshouses || [];
@@ -363,7 +362,7 @@ export function* buildGlasshousesJob(city) {
  * [F111] Under a dome the chase camera looks up a little, into it: `lookUpM` (default 3 m at the look point, ~10°)
  * at the dome's centre, easing to nothing at its rim. domes: [{x, z, r, m}] (scene metres).
  */
-export function domeLookUp(domes, x, z) {
+function domeLookUp(domes, x, z) {
   let up = 0;
   for (const d of domes) {
     const t = 1 - Math.hypot(x - d.x, z - d.z) / d.r;

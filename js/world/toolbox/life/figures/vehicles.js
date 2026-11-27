@@ -329,7 +329,7 @@ const CACHE = new Map();
  * The geometry of one vehicle kind (shared; don't dispose it, call disposeVehicleGeometries()). lod 'hi' for
  * traffic (about 600 triangles a car), 'lo' for parked ones (under 200: bevelled boxes, plain wheels, no lights).
  */
-export function vehicleGeometry(kind, lod = 'hi') {
+function vehicleGeometry(kind, lod = 'hi') {
   if (!BUILD[kind]) kind = 'sedan';
   const key = `${kind}|${lod}`;
   if (!CACHE.has(key)) {

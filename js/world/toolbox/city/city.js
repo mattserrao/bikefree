@@ -29,13 +29,13 @@ const CHUNK = 320;
 // [w2-budget] Static city meshes (buildings, streets, sidewalks, paths, lamps, street trees) are merged per sector of
 // SECTOR × SECTOR chunks (960 m): a sector is one draw call per material wherever it is seen. Buildings stream in per
 // chunk (nearest first) and fold into their sector's mesh once the sector's last chunk is built.
-export const SECTOR = 3;
+const SECTOR = 3;
 const LAMP_LOD = { light: 420, balanced: 600, high: 800 };   // [w2-budget] lamp posts drawn up to this far from their sector's box (m)
 const SECTOR_M = CHUNK * SECTOR;
 const sectorOf = (key) => { const [x, z] = key.split(',').map(Number); return `${Math.floor(x / SECTOR)},${Math.floor(z / SECTOR)}`; };
 
 /** [w2-budget] One geometry from several with the same attributes (indexed; 32-bit index when it needs one). */
-export function mergeGeometries(list) {
+function mergeGeometries(list) {
   list = list.filter((g) => g.attributes.position?.count);
   const out = new THREE.BufferGeometry();
   if (!list.length) return out;

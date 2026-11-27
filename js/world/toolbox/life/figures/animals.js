@@ -17,7 +17,7 @@ import { vhash } from '../../core/random.js';
 import { HASH_GLSL } from '../../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 import { anchor } from '../../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
-export const PART_ANIM = { BODY: 0, HEAD: 1, TAIL: 2, FL: 3, FR: 4, BL: 5, BR: 6, SHADOW: 8, PATCH: 10 };   // (PATCH: + a part, a Holstein's coat)
+const PART_ANIM = { BODY: 0, HEAD: 1, TAIL: 2, FL: 3, FR: 4, BL: 5, BR: 6, SHADOW: 8, PATCH: 10 };   // (PATCH: + a part, a Holstein's coat)
 const P = PART_ANIM;
 
 class AnimalBuilder extends VehBuilder {

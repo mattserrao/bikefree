@@ -27,7 +27,7 @@ gl_Position.z -= aSlot * 4e-7 * gl_Position.w;
  * windows (on the same grid as before, so the street kit's sills and storefronts still line up) with frames, sashes,
  * blinds and curtains, a sky streak, stone lintels and sills. Sets bfWin / bfLit like the plain version.
  */
-export const CITY_FACADE_GLSL = /* glsl */`
+const CITY_FACADE_GLSL = /* glsl */`
   if (abs(vWNorm.y) < .5) {
     vec2 t = normalize(vec2(-vWNorm.z, vWNorm.x));
     float along = dot(vWPos.xz, t), up = vWPos.y - vBld.z;

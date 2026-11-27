@@ -20,7 +20,7 @@ export { CLIP_META };
 export const FIT = { SLEEVES: 1, LONG_PANTS: 2, SKIRT: 4, LONG_HAIR: 8, CAP: 16, PACK: 32, PROP: 64, HELMET: 128,
   JACKET: 256, HOOD: 512, BEANIE: 1024, ROD: 2048, STYLE: 4096 };
 // hair styles (three bits at FIT.STYLE: look.bits += style × FIT.STYLE); long hair stays its own bit
-export const HAIR_STYLE = { SHORT: 0, PONYTAIL: 1, BUN: 2, CURLY: 3, BUZZ: 4 };
+const HAIR_STYLE = { SHORT: 0, PONYTAIL: 1, BUN: 2, CURLY: 3, BUZZ: 4 };
 // vertex selectors (aSkin.w): what a vertex belongs to, for the outfit
 const SEL = { ALWAYS: 0, FOREARM: 1, SHIN: 2, SKIRT: 3, THIGH: 4, LONG_HAIR: 5, CAP: 6, PACK: 7, PROP: 8, HELMET: 9, HAIR: 10,
   PONYTAIL: 11, BUN: 12, CURLY: 13, JACKET: 14, HOOD: 15, BEANIE: 16, ROD: 17 };
@@ -56,7 +56,7 @@ function clipFloats() {
   return (CLIP_FLOATS = f);
 }
 /** The clips as a float texture: row = clip × FRAMES + frame, two texels per bone (quaternion, translation). */
-export function clipTexture() {
+function clipTexture() {
   if (CLIP_TEXTURE) return CLIP_TEXTURE;
   const f = clipFloats(), rows = CLIP_META.length * FRAMES, data = new Float32Array(rows * BONES * 2 * 4);
   for (let r = 0; r < rows; r++) for (let b = 0; b < BONES; b++) {
@@ -388,7 +388,7 @@ export function dogGeometry() {
 }
 
 /** A stroller pushed by a walker (rest frame of the walker: the handle at HOLD.stroller.handle). iA fabric. */
-export function strollerGeometry() {
+function strollerGeometry() {
   const M = new FigBuilder(), [, hy, hz] = HOLD.stroller.handle;
   const fab = () => M.set({ b0: 0, b1: 0, w: 1, mask: SHIRT, sel: 0, color: '#ffffff' });
   const fix = (c) => M.set({ b0: 0, b1: 0, w: 1, mask: FIXED, sel: 0, color: c });
@@ -495,7 +495,7 @@ export function figureMaterial(uTime, { near = null, mid = null, nearMode = 0 } 
 }
 
 /** An instanced mesh of figures with the per-instance attributes set up (count starts at 0). */
-export function figureMesh(geometry, material, capacity, name, { shadows = true } = {}) {
+function figureMesh(geometry, material, capacity, name, { shadows = true } = {}) {
   const g = geometry.clone();
   for (const [k, n] of [['iA', 3], ['iB', 3], ['iC', 3], ['iAnim', 4], ['iLook', 4]]) {
     const a = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, capacity) * n), n); a.setUsage(THREE.DynamicDrawUsage); g.setAttribute(k, a);

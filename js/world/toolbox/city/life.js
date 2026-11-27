@@ -22,7 +22,7 @@ const CAR_MIX = [['sedan', .34], ['hatch', .2], ['suv', .22], ['pickup', .07], [
 // [6.10] people and traffic about half what they were (low 70 / 40, balanced 160 / 85, high 260 / 140; buses
 // max(4, cars / 12) → max(2, cars / 12); 4 oncoming cars → 2); `cyclists` ride the side streets and trails as before,
 // `routeRiders` ride the route's own road with you (ROUTE_RIDE below)
-export const COUNTS = { low: { people: 35, cars: 20, cyclists: 6, routeRiders: 5 }, balanced: { people: 80, cars: 42, cyclists: 12, routeRiders: 8 }, high: { people: 130, cars: 70, cyclists: 18, routeRiders: 10 } };
+const COUNTS = { low: { people: 35, cars: 20, cyclists: 6, routeRiders: 5 }, balanced: { people: 80, cars: 42, cyclists: 12, routeRiders: 8 }, high: { people: 130, cars: 70, cyclists: 18, routeRiders: 10 } };
 const ONCOMING = 2;
 export const MOVING_TRAFFIC = false;   // (cars and buses driving the streets: off — parked cars only)
 // [6.10] riders on the route with you (_updateRouteRiders): their lanes (m right of the centre line, riding their way:
@@ -32,7 +32,7 @@ export const MOVING_TRAFFIC = false;   // (cars and buses driving the streets: o
 // their way to a pass; slower ones start `aheadMin`–`aheadMax` m ahead (out of sight), faster ones `behindMin`–`behindMax`
 // m behind; their share slower / faster than you (`unseen`: how far that may go while out of sight: more than `unseenM` m
 // behind or ahead; and at least `minDv` m/s); your speed taken as at least `minRef` m/s, smoothed over `refTau` s
-export const ROUTE_RIDE = { lane: 2.8, edge: 3.15, pass: .3, passWide: -.75, clear: .95, clearNear: 1.25, latRate: .7, every: 80, soonest: 15, horizon: 600, behindLead: 75, pending: 3,
+const ROUTE_RIDE = { lane: 2.8, edge: 3.15, pass: .3, passWide: -.75, clear: .95, clearNear: 1.25, latRate: .7, every: 80, soonest: 15, horizon: 600, behindLead: 75, pending: 3,
   aheadMin: 175, aheadMax: 650, behindMin: 14, behindMax: 260, slower: [.06, .2], faster: [.06, .2], unseen: [.5, .6], unseenM: [15, 110], minDv: .5, endM: 60, minRef: 1, refTau: 3 };
 const CARS = ['#c0392b', '#1f3a5f', '#ecf0f1', '#2c2c2c', '#7f8c8d', '#bdc3c7', '#1e8449', '#f4d03f', '#5b2c6f', '#a04000', '#ffffff', '#566573'];
 

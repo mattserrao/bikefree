@@ -11,9 +11,8 @@ const W = 2048, H = 256, CELLS = 8, CW = W / CELLS;
 // [plants phase 3] 5–7: the desert's — bunchgrass (Indian ricegrass, needle-and-thread, galleta), cheatgrass, forbs
 export const CARD = { turf: 0, tall: 1, goldenrod: 2, lace: 3, scrub: 4, bunch: 5, cheat: 6, forb: 7 };
 /** The u offset from one card cell to the next (GroundCover's per-tuft cell: shifted in the shader). */
-export const CELL_U = CW / W;
+const CELL_U = CW / W;
 /** The texture coordinate of the atlas's opaque white corner (for geometry that isn't a card). */
-export const SOLID_UV = [1.5 / W, 1.5 / H];
 
 function rnd(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 

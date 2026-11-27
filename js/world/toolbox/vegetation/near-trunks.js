@@ -26,7 +26,7 @@ const BARK_TONE = { maple: [1.62, 1.42, 1.24], beech: [1.06, 1.04, 1.0], hickory
 const SEG = 14;
 
 let textures = null;
-export function barkTextures() {
+function barkTextures() {
   if (textures) return textures;
   const L = new THREE.TextureLoader();
   const load = (f, srgb) => {

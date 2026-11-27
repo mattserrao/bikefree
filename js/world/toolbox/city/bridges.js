@@ -3,7 +3,7 @@
 // aircraft beacons and the Gulf Tower's weather beacon.
 import * as THREE from '../../../../vendor/three.js';
 import { MeshBuilder, resample, makePath, hash } from '../core/mesh-builder.js';
-import { drain, due, each } from '../core/jobs.js';   // [F30]
+import { due, each } from '../core/jobs.js';   // [F30]
 import { ROAD_WIDTH } from '../core/road-frame.js';
 import { randomSequence } from '../core/random.js';
 
@@ -15,7 +15,7 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
  * y + .35), and in the middle a three-tier granite pedestal with the nozzle and the jet's solid white core (the spray
  * is drawn as points on top). Granite blocks vary a little in tone. ≈ 1,000 triangles, one merged builder.
  */
-export function fountainBasin(M, x, y, z, r, { seg = 64, jetM = 18, footY = y - .1 } = {}) {
+function fountainBasin(M, x, y, z, r, { seg = 64, jetM = 18, footY = y - .1 } = {}) {
   const ring = (rr, k) => { const a = k / seg * Math.PI * 2; return [x + Math.cos(a) * rr, z + Math.sin(a) * rr]; };
   const quadR = (r0, y0, r1, y1, k, outward) => {   // a band between (r0, y0) and (r1, y1) for segment k
     const [ax, az] = ring(r0, k), [bx, bz] = ring(r0, k + 1), [cx, cz] = ring(r1, k + 1), [dx, dz] = ring(r1, k);
@@ -244,7 +244,6 @@ function superstructure(M, city, path, style, width, lights) {
   }
 }
 
-export function buildBridges(city) { return drain(buildBridgesJob(city)); }
 /** buildBridges as a job ([F30]: js/world/toolbox/core/jobs.js). */
 export function* buildBridgesJob(city) {
   const M = new MeshBuilder(), lights = [];

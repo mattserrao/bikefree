@@ -115,7 +115,7 @@ export const FACADE_STYLES = {
     sills: false, roof: ['#8e9296'], trim: ['#9aa4ab'], frame: ['#1f2428'] },
 };
 /** Building kind (tools/build_city.py) → facade style outside a zone; null: left plain. */
-export const AUTO_STYLE = { 0: 'rowhouse', 1: null, 2: 'masonry', 3: 'industrial', 4: 'tower', 5: 'glass', 7: 'masonry', 8: 'industrial', 11: 'masonry' };
+const AUTO_STYLE = { 0: 'rowhouse', 1: null, 2: 'masonry', 3: 'industrial', 4: 'tower', 5: 'glass', 7: 'masonry', 8: 'industrial', 11: 'masonry' };
 
 const SHOP_LABELS = {
   food: ['PIZZA', 'TACOS', 'DINER', 'NOODLES', 'BBQ', 'DELI', 'PIEROGIES', 'RAMEN', 'BURGERS', 'THAI'],

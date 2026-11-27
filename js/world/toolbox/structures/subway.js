@@ -18,7 +18,7 @@ import { worldSound, noiseLoop, toneLoop } from '../core/sound.js';
 import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
 const FLOOR = .1;                    // the path surface above the line (the rider's wheels)
-export const TRACKS = [-4, -8];      // track centres, metres right of the line (left: negative)
+const TRACKS = [-4, -8];      // track centres, metres right of the line (left: negative)
 const BED = -1.05;                   // the track bed under the path (a platform's height)
 const WALL_L = -10.4;                // the tunnel's left wall (beyond the far track)
 const EDGE = -2.2;                   // the platform edge / railing side of the path

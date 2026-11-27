@@ -26,7 +26,7 @@ export const POND_KINDS = {
   reservoir: { rim: .55, wall: true }, fountain: { rim: .45, wall: true }, pool: { rim: .45, wall: true }, pond: { rim: .3, wall: false },
 };
 /** The ground a pond holds (metres out from its edge): raised to its bank, easing back to the hillside. */
-export const POND_BANK_M = 9;
+const POND_BANK_M = 9;
 
 const decode = (text, Type) => {
   const bytes = Uint8Array.from(atob(text), (c) => c.charCodeAt(0));

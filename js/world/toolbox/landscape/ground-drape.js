@@ -66,12 +66,6 @@ export function groundDrape(h, x0, z0, cell, S, heightAt, { clear = 0, maxDrop =
   };
 }
 
-/** One-shot form: lower `h` for all `points` at once. Returns how many vertices were lowered. */
-export function drapeGround(h, x0, z0, cell, S, points, heightAt, clear = 0, maxDrop = Infinity) {
-  const d = groundDrape(h, x0, z0, cell, S, heightAt, { clear, maxDrop });
-  d.add(points);
-  return d.apply().n;
-}
 
 /** The cap the app uses (m): see groundDrape's maxDrop. */
 export const DRAPE_MAX_DROP = 4;

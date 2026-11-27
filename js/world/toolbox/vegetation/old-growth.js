@@ -38,7 +38,7 @@ import { LEAF_V } from './leaf-cards.js';
 import { HASH_GLSL } from '../materials/glsl-noise.js';   // [review 27 Nov] the shared sin-free hash and value noise
 import { anchor } from '../core/shader-patch.js';   // [review 27 Nov] T8: a missing shader anchor throws
 
-export const OG = { old: 30, forest: 31, meadow: 32, blow: 33 };
+const OG = { old: 30, forest: 31, meadow: 32, blow: 33 };
 const isWood = (c) => c === OG.old || c === OG.forest || c === OG.blow;
 const BAND = 30;            // m: the skirt reaches this far from a trail's centre
 const TREAD = .11;          // m: the floor at the trail's line, over its height (the rider rides ROAD_LIFT .12 over it)

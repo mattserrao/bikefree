@@ -279,5 +279,3 @@ function buildKit(fall) {
 
 /** Category for the shared materials (wind on soft plants, double-sided thin parts). */
 export const NORTHEAST_CATEGORY = Object.fromEntries(PACK_META.northeast.groundcover.map((n) => [n, 'groundcover']));
-export const SPECIES_VARIANTS = PACK_META.northeast.variants;
-export const FOREST_SPECIES = Object.keys(SPECIES_VARIANTS);
