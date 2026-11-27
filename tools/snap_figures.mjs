@@ -2,11 +2,11 @@
 //
 //   npm run snap:figures                                  # every view → tools/snapshots/figures-<view>.png
 //   node tools/snap_figures.mjs --views people,close --t 2.3 --lo --size 1600x900 --out /tmp
-import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname, extname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -15,16 +15,8 @@ const out = resolve(ROOT, opt('--out', 'tools/snapshots'));
 const views = opt('--views', 'people,variety,close,vehicles,street,crowd').split(',');
 const [w, h] = opt('--size', '1400x800').split('x').map(Number);
 const t = opt('--t', '1.7');
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try { const body = await readFile(join(ROOT, path)); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const chrome = opt('--chrome', findChrome());
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 await mkdir(out, { recursive: true });
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

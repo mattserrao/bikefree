@@ -4,11 +4,11 @@
 //   node tools/snap_endless.mjs farm@800 forest@9000:0.5 climb@3300:0.4:rolling,rolling,climb,climb
 // Each shot places the rider <metres> along the course; day is the cycle's time (0–1); modes the miles' terrain types.
 // Writes <out>/endless-<name>.png and prints frame stats.
-import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve, join, normalize, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
@@ -17,15 +17,8 @@ const flag = (k) => { const i = args.indexOf(k); if (i < 0) return false; args.s
 const evalJs = opt('--eval', null);   // run in the page after the frame (the world as `w`, THREE as `T`): its result is printed (tools/qc_map.mjs endless)
 const software = flag('--software'), seed = opt('--seed', '1'), quality = opt('--quality', 'balanced'), out = opt('--out', 'tools/snapshots'), view = opt('--view', null);
 const [width, height] = opt('--size', '1280x720').split('x').map(Number);
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync));
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  let body; try { body = await readFile(join(ROOT, path)); } catch { res.writeHead(404).end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body);
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const chrome = opt('--chrome', findChrome());
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: software ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--enable-gpu'] });

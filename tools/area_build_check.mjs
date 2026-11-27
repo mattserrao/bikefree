@@ -13,30 +13,22 @@
 //
 // Areas are the network's area ids (core, allegheny, oakland, …). Prints per area: the build's main-thread time, its
 // slices (count, longest), the objects and the fingerprint.
-import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, dirname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serve, findChrome } from './lib/harness.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); if (i < 0) return dflt; const v = args[i + 1]; args.splice(i, 2); return v; };
 const ROOT = resolve(opt('--root', join(dirname(fileURLToPath(import.meta.url)), '..')));
 const budget = Number(opt('--budget', '4'));
 const park = opt('--park', 'pittsburgh'), quality = opt('--quality', 'balanced'), outFile = opt('--out', null);
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 const gapsOpt = (() => { const i = args.indexOf('--gaps'); if (i < 0) return false; args.splice(i, 1); return true; })();   // (debug: a jobs.js that records gaps)
 const areas = args.length ? args : ['oakland'];
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.bin': 'application/octet-stream', '.gz': 'application/octet-stream' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try { const body = await readFile(join(ROOT, path || 'index.html')); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const browser = await chromium.launch({ executablePath: chrome, args: ['--ignore-gpu-blocklist', '--enable-gpu', '--enable-precise-memory-info'] });

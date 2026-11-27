@@ -17,12 +17,12 @@
 // files per route) and routes/previews/renders.json (the tool's: each picture's spot and input hash, for --check).
 //
 // Run it under the shared lock: flock /tmp/heavy.lock node tools/build_previews.mjs --stale --limit 3
-import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { ROOT, loadSources, planRoutes, imageName } from './preview_spots.mjs';
+import { serve, findChrome } from './lib/harness.mjs';
 
 export const SIZE = { width: 480, height: 270 };
 export const RENDER = {
@@ -42,8 +42,7 @@ const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; 
 const only = opt('--only', null), parkOnly = opt('--park', null), limit = Number(opt('--limit', Infinity));
 const quality = opt('--quality', 'balanced');
 const check = flag('--check'), planOnly = flag('--plan'), staleOnly = flag('--stale'), software = flag('--software');
-const chrome = opt('--chrome', process.env.CHROME || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
+const chrome = opt('--chrome', findChrome());
 
 const readJson = (p, dflt) => (existsSync(resolve(ROOT, p)) ? JSON.parse(readFileSync(resolve(ROOT, p), 'utf8')) : dflt);
 const sha = (buf) => createHash('sha256').update(buf).digest('hex');
@@ -126,14 +125,7 @@ await mkdir(resolve(ROOT, DIR), { recursive: true });
 if (!parks.length) { await writeManifests(); console.log(`Wrote ${INDEX}`); process.exit(0); }
 
 // ---------- render ----------
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.gpx': 'application/gpx+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.bin': 'application/octet-stream' };
-const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) { res.writeHead(403).end(); return; }
-  try { const body = await readFile(join(ROOT, path || 'index.html')); res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' }).end(body); }
-  catch { res.writeHead(404).end(); }
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const { server } = await serve(ROOT);   // (tools/lib/harness.mjs: code review P9)
 const base = `http://127.0.0.1:${server.address().port}`;
 const { chromium } = await import('playwright-core');
 const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: '127.0.0.1,localhost' } : undefined;   // streamed terrain behind a proxy
