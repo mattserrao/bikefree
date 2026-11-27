@@ -13,6 +13,11 @@ import * as THREE from '../../../../vendor/three.js';
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]], UVS = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
 
 export const cardArrays = () => ({ pos: [], nor: [], uv: [], col: [], card: [], pad: 0 });
+// [shrub style, 27 Nov] the leaf texture is two squares tall: the four leaf clusters in its lower half (v 0–0.5: every
+// caller's quadrant, (v0 + …) × LEAF_V), four desert-shrub pictures in its upper half (makeLeafTexture). A card names a
+// shrub picture by SHRUB_CELL's [u0, v0].
+export const LEAF_V = .5;
+export const SHRUB_CELL = { sage: [0, 1.5], broom: [.5, 1.5], tips: [0, 1], twig: [.5, 1] };
 
 /** A card at `c` (Vector3), half sizes w × h (m), turned `roll` in its plane, `upright` to keep its y to world up (a
  *  drooping willow spray, a bush's upright sheet); n: its (spherized) normal; one of the texture's four clusters. */
@@ -20,7 +25,7 @@ export function pushCard(C, c, w, h, roll, upright, n, u0, v0, col) {
   for (let j = 0; j < 6; j++) {
     const [sx, sy] = CORNERS[j];
     C.pos.push(c.x, c.y, c.z); C.nor.push(n.x, n.y, n.z); C.col.push(col.r, col.g, col.b);
-    C.uv.push(u0 + UVS[j][0] * .5, v0 + UVS[j][1] * .5);
+    C.uv.push(u0 + UVS[j][0] * .5, (v0 + UVS[j][1] * .5) * LEAF_V);
     C.card.push(sx * w, sy * h, roll, upright ? 1 : 0);
   }
   C.pad = Math.max(C.pad, Math.hypot(w, h));

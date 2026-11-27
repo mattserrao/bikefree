@@ -18,7 +18,7 @@
 //     flutter near by; nothing far off.
 //
 //   const E = new TreeEngine({ renderer, parent, quality, uTime, lights: { hemi, sun }, kit })
-//   E.setTile(key, trees)   trees: [{ x, y, z, sp, v, s, rot, tint, deep }]  (sp: species name in kit, v: variant, s: scale;
+//   E.setTile(key, trees)   trees: [{ x, y, z, sp, v, s, rot, tint, hue?: [r, g, b], deep }]  (sp: species name in kit, v: variant, s: scale;
 //                           deep: > 30 m from any road — the cards take it sooner)
 //   E.removeTile(key); E.tick(camera); E.stats; E.dispose()
 import * as THREE from '../../../../vendor/three.js';
@@ -382,9 +382,10 @@ export class TreeEngine {
       vertexShader: /* glsl */`
         attribute vec4 iA; attribute vec4 iB; attribute float iT; attribute vec2 iS;   // iA: x, y, z, rotation; iB: width, height, row, tint; iT: when its tile came; iS: its swap (when, 0 hidden / 1 shown / 2 in / 3 out)
         attribute vec2 iL;    // [zwift-look] the lean: the top's offset per metre up (x, z)
+        attribute vec3 iH;    // [plants phase 1] a colour tint (r, g, b): one shrub's shape serves several plants
         attribute float iC;   // a trunk cut (m above the base; 0: none): below it, near the camera, a 3D trunk stands in
         uniform float uRows; uniform float uNow;
-        varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint; varying vec3 vHue;
         varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP; varying vec2 vRot;
         #include <fog_pars_vertex>
         void main() {
@@ -410,7 +411,7 @@ export class TreeEngine {
           vUv = vec2((f0 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
           vUv2 = vec2((f1 + uv.x) / ${ANGLES}., (iB.z + uv.y) / uRows);
           // (iB.w: the tint, plus 10 × a colour grade — 1 a hero woods' tree, 2 its understory: old-growth.js)
-          vGrade = floor(iB.w / 10.); vTint = iB.w - vGrade * 10.;
+          vGrade = floor(iB.w / 10.); vTint = iB.w - vGrade * 10.; vHue = iH;
           vec3 p = o + right * position.x * iB.x + vec3(0., position.y * iB.y, 0.);
           p.xz += iL * position.y * iB.y;
           // (a tree beside the path, inside ~30 m: its card's trunk gives way to a 3D bark trunk, in the same dither as
@@ -424,7 +425,7 @@ export class TreeEngine {
           #include <fog_vertex>
         }`,
       fragmentShader: /* glsl */`
-        uniform sampler2D uAtlas; uniform sampler2D uSurf; uniform vec2 uAtlasSize; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint;
+        uniform sampler2D uAtlas; uniform sampler2D uSurf; uniform vec2 uAtlasSize; varying vec2 vUv; varying vec2 vUv2; varying float vBlend; varying float vKeep; varying float vOut; varying float vTint; varying vec3 vHue;
         varying float vH; varying float vCut; varying float vTrunk; varying float vGrade; varying vec3 vWP; varying vec2 vRot;
         uniform sampler2D uNorm; uniform float uRelight; uniform vec3 uSunNow, uSunBake;
         #include <common>
@@ -483,7 +484,7 @@ export class TreeEngine {
             float d0 = max(dot(n, uSunBake), 0.), d1 = max(dot(n, sT), 0.);
             col *= clamp((.6 + d1) / (.6 + d0), .65, 1.5);
           }
-          gl_FragColor = vec4(col * vTint, cov);
+          gl_FragColor = vec4(col * vTint * vHue, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
@@ -531,7 +532,8 @@ export class TreeEngine {
     let n = 0; for (const t of this.tiles.values()) n += t.length;
     if (n > this.impCap) {
       this.impCap = Math.ceil(n * 1.3);
-      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2); this.iC = new Float32Array(this.impCap); this.iL = new Float32Array(this.impCap * 2);
+      this.iA = new Float32Array(this.impCap * 4); this.iB = new Float32Array(this.impCap * 4); this.iT = new Float32Array(this.impCap); this.iS = new Float32Array(this.impCap * 2); this.iC = new Float32Array(this.impCap); this.iL = new Float32Array(this.impCap * 2); this.iH = new Float32Array(this.impCap * 3);
+      this.impGeo.setAttribute('iH', new THREE.InstancedBufferAttribute(this.iH, 3));
       this.impGeo.setAttribute('iL', new THREE.InstancedBufferAttribute(this.iL, 2));
       this.impGeo.setAttribute('iC', new THREE.InstancedBufferAttribute(this.iC, 1));
       this.impGeo.setAttribute('iA', new THREE.InstancedBufferAttribute(this.iA, 4)); this.impGeo.setAttribute('iB', new THREE.InstancedBufferAttribute(this.iB, 4)); this.impGeo.setAttribute('iT', new THREE.InstancedBufferAttribute(this.iT, 1));
@@ -548,11 +550,12 @@ export class TreeEngine {
       for (const t of list) {
         const e = t.e; if (!e.imp) continue;
         this.iA.set([t.x, t.y, t.z, t.rot], k * 4); this.iB.set([e.imp.half * 2 * t.s, e.imp.top * t.sy, e.imp.row, t.tint + 10 * (t.grade || 0)], k * 4); this.iT[k] = born; this.iC[k] = t.cut || 0; this.iL[k * 2] = t.lean ? t.lean[0] : 0; this.iL[k * 2 + 1] = t.lean ? t.lean[1] : 0;
+        const H = t.hue; this.iH[k * 3] = H ? H[0] : 1; this.iH[k * 3 + 1] = H ? H[1] : 1; this.iH[k * 3 + 2] = H ? H[2] : 1;
         this.iS[k * 2] = t.ts ?? -1e9; this.iS[k * 2 + 1] = t.tier === 2 ? 1 : 0; t.ik = k; k++;
       }
     }
     this.impGeo.instanceCount = k;
-    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true; this.impGeo.attributes.iC.needsUpdate = true; this.impGeo.attributes.iL.needsUpdate = true;
+    this.impGeo.attributes.iA.needsUpdate = true; this.impGeo.attributes.iB.needsUpdate = true; this.impGeo.attributes.iT.needsUpdate = true; this.impGeo.attributes.iS.needsUpdate = true; this.impGeo.attributes.iC.needsUpdate = true; this.impGeo.attributes.iL.needsUpdate = true; this.impGeo.attributes.iH.needsUpdate = true;
     this._at = null;   // (the tiers: a re-sort now)
     this.stats.far = k;
   }
@@ -665,7 +668,7 @@ export class TreeEngine {
           this.group.remove(im); im.dispose(); this.group.add(nim); e.pools[tier][pi] = im = nim;
         }
         const fa = im.geometry.attributes.aFade, fd = fa.array, mk = tier ? '_m1' : '_m0';
-        list.forEach((t, k) => { q.setFromAxisAngle(Y, t.rot); if (t.lean) q.premultiply(leanQ(t.lean, ql)); p.set(t.x, t.y, t.z); s.set(t.s, t.sy, t.s); im.setMatrixAt(k, m.compose(p, q, s)); im.setColorAt(k, c.setScalar(t.tint)); fd[k * 2] = t.ts; fd[k * 2 + 1] = t[mk]; });
+        list.forEach((t, k) => { q.setFromAxisAngle(Y, t.rot); if (t.lean) q.premultiply(leanQ(t.lean, ql)); p.set(t.x, t.y, t.z); s.set(t.s, t.sy, t.s); im.setMatrixAt(k, m.compose(p, q, s)); im.setColorAt(k, t.hue ? c.setRGB(t.tint * t.hue[0], t.tint * t.hue[1], t.tint * t.hue[2]) : c.setScalar(t.tint)); fd[k * 2] = t.ts; fd[k * 2 + 1] = t[mk]; });
         fa.clearUpdateRanges(); fa.addUpdateRange(0, list.length * 2); fa.needsUpdate = true;
         im.count = list.length; im.visible = list.length > 0;
         im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, list.length * 16); im.instanceMatrix.needsUpdate = true;

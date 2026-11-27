@@ -8,9 +8,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const ev = JSON.parse(read('tools/reference/outwest-evidence.json')), B = JSON.parse(read('tools/reference/budgets.json'));
+const B = JSON.parse(read('tools/reference/budgets.json'));
+// (the records: PR #72's look, then the plant life — plants phases 0–5)
+const RECORDS = ['outwest-evidence', 'outwest-plants-evidence'].map((n) => [n, JSON.parse(read(`tools/reference/${n}.json`))]);
 
-test('the evidence is a real record: four matched shots, each with a photo licence, stats and counters before and after', () => {
+for (const [name, ev] of RECORDS) {
+test(`${name}: the evidence is a real record: four matched shots, each with a photo licence, stats and counters before and after`, () => {
   assert.equal(ev.format, 'bikefree-visual-evidence-1');
   assert.ok(ev.shots.length >= 4, `${ev.shots.length} shots`);
   for (const s of ev.shots) {
@@ -19,7 +22,7 @@ test('the evidence is a real record: four matched shots, each with a photo licen
   }
 });
 
-test('no shot moved further from its photo, and every land is within the image budget', () => {
+test(`${name}: no shot moved further from its photo, and every land is within the image budget`, () => {
   const I = B.image;
   for (const s of ev.shots) {
     const b = s.before.stats.land, a = s.after.stats.land;
@@ -33,7 +36,7 @@ test('no shot moved further from its photo, and every land is within the image b
   }
 });
 
-test('every after-shot is within the frame budgets (draw calls, triangles, programs, memory, overdraw)', () => {
+test(`${name}: every after-shot is within the frame budgets (draw calls, triangles, programs, memory, overdraw)`, () => {
   const C = B.counters;
   for (const s of ev.shots) {
     const c = s.after.counters, at = s.photo;
@@ -46,6 +49,7 @@ test('every after-shot is within the frame budgets (draw calls, triangles, progr
     assert.ok(c.cpuMs <= C.cpuMs, `${at}: ${c.cpuMs} ms script per frame`);
   }
 });
+}
 
 test('the tree impostor atlas keeps no multisample or depth buffer of its own (baked a row at a time, then copied)', () => {
   const src = read('js/world/toolbox/vegetation/tree-engine.js');

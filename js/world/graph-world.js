@@ -176,6 +176,44 @@ export function roadHash(edges, widths, cell = 32, kerbM = KERB) {
   };
 }
 
+// [plants phase 3, 27 Nov] the desert's ground cover, tuft by tuft (toolbox/landscape/ground-cover.js, one draw): which
+// grass card, its colour and height by the cover under it (claude/desert-plant-life-plan.md) — bunchgrass on the flats
+// and benches, cheatgrass thick on the disturbed strip beside the road and in town, fall forbs scattered, Indian
+// ricegrass pale on the dunes, a few in the slickrock's cracks
+const TUFT = {
+  bunch: { cell: 5, h: 2, tint: [.95, .95, .92] }, cheat: { cell: 6, h: 1.25, tint: [1, .96, .95] },
+  forb: { cell: 7, h: 2.3, tint: [1, 1, 1] }, rice: { cell: 5, h: 1.7, tint: [1.08, 1.04, .98] }, lawn: { cell: 0, h: 1, tint: [.8, .82, .62] },
+  // (the shrubs near the rider, at the cover the ecology reports — big sagebrush 6–20%, Davies et al. 2006: the tree
+  //  engine's 3D shrubs, one spot per 8 m, reach ~2%; these fill to the real cover inside the tufts' 48 m, as the
+  //  verge's leafy scrub card in each shrub's own colours)
+  sage: { cell: 4, h: 2.3, w: 2.2, tint: [.74, .78, .66] }, sageS: { cell: 4, h: 1.6, w: 1.6, tint: [.78, .8, .7] },
+  snake: { cell: 4, h: 1.1, w: 1.1, tint: [.78, .74, .36] }, rabbit: { cell: 4, h: 2, w: 1.8, tint: [.8, .76, .42] },
+  salt: { cell: 4, h: 2, w: 2, tint: [.82, .83, .74] }, sandsage: { cell: 4, h: 2, w: 2, tint: [.86, .89, .78] },   // (silvery: lighter than they're drawn — the first census shots had them charcoal in the low sun)
+  black: { cell: 4, h: 1.4, w: 1.5, tint: [.42, .43, .39] },
+};
+const tuftHash = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
+function desertTuft(c, x, z, GRASS) {
+  if (c.onRoad(x, z, 1.2) || c.inWater?.(x, z)) return 0;
+  const k = c.landAt(x, z), r = tuftHash(x, z), verge = c.onRoad(x, z, 7);
+  let d = GRASS[k] || 0;
+  if (verge && k !== 5) d = Math.max(d, .45);   // (the road's disturbed strip: cheatgrass, whatever the cover)
+  if (!d) return 0;
+  d *= .25 + 1.3 * tuftHash(Math.floor(x / 9) + .31, Math.floor(z / 9) + .17);   // (in patches, not a sown field)
+  // (a shrub's share: about a tenth of the spots on the sage flats — 3.2 spots/m² × d × share × ~1 m² a shrub ≈ the
+  //  published cover; the plant census, tools/reference/plant_census.py, measures it)
+  const s = tuftHash(x * 1.7 + 3.1, z * 1.3 + 7.7);
+  const shrub = verge ? (s < .1 ? (s < .07 ? TUFT.snake : TUFT.rabbit) : null)
+    : k === 41 ? (s < .13 ? (s < .06 ? TUFT.sage : s < .08 ? TUFT.sageS : s < .1 ? TUFT.rabbit : s < .115 ? TUFT.snake : TUFT.salt) : null)
+      : k === 40 ? (s < .08 ? (s < .05 ? TUFT.sage : TUFT.snake) : null)
+        : k === 5 ? (s < .35 ? (s < .28 ? TUFT.sandsage : TUFT.rabbit) : null)
+          : k === 42 ? (s < .15 ? TUFT.black : null) : null;
+  if (shrub) return { d, ...shrub };
+  const kind = verge ? (r < .7 ? TUFT.cheat : r < .85 ? TUFT.forb : TUFT.bunch)
+    : k === 5 ? TUFT.rice : k === 43 ? (r < .5 ? TUFT.cheat : r < .8 ? TUFT.lawn : TUFT.forb)
+      : k === 41 ? (r < .6 ? TUFT.bunch : r < .82 ? TUFT.cheat : TUFT.forb) : (r < .75 ? TUFT.bunch : TUFT.forb);
+  return { d, ...kind };
+}
+
 export class GraphWorld {
   /**
    * @param container  the ride view's element
@@ -1031,10 +1069,12 @@ export class GraphWorld {
             const desert = this.profile.ground === 'desert';
             // [evidence 27 Nov] the desert's flats are bunchgrass between the sage (the photos), not bare sand: pinyon-juniper
             // benches thin, sage flats thick, the town's gravel lots sparse
-            const GRASS = desert ? { 5: .22, 40: .35, 41: .75, 43: .3 } : { 1: 1, 8: .7, 11: .9 };   // LAND.grass, yards, pasture: how thick
-            const mat = c.vergeMat || grassMaterial(this.renderer, c.treeTime || { value: 0 }, this.qualityKey !== 'low');
+            const GRASS = desert ? { 5: .1, 40: .22, 41: .42, 42: .05, 43: .2 } : { 1: 1, 8: .7, 11: .9 };   // LAND.grass, yards, pasture: how thick
+            // (its own copy of the verge's material: no depth written — the tufts are sorted far to near instead, so the
+            //  contact shading doesn't take a tuft's back card for a crease: ground-cover.js)
+            const mat = grassMaterial(this.renderer, c.treeTime || { value: 0 }, this.qualityKey !== 'low'); mat.depthWrite = false; mat.side = THREE.FrontSide;
             this.groundCover = new GroundCover({ parent: this.scene, material: mat, radius: this.qualityKey === 'ultra' ? 64 : this.qualityKey === 'high' ? 48 : 38, density: 3.2,
-              isGrass: (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
+              isGrass: desert ? (x, z) => desertTuft(c, x, z, GRASS) : (x, z) => { const g = GRASS[c.landAt(x, z)] || 0; return g && !c.onRoad(x, z, 1.2) && !c.inWater?.(x, z) ? g : 0; },
               heightAt: (x, z) => this.surfaceH(x, z), tint: desert ? [1.45, 1.12, 1.05] : null });
           }
           for (const t of this.tiles.values()) if (t.built) this._release(t);
@@ -2478,6 +2518,11 @@ function groundMaterial(low = false, rural = false, soft = false, desert = false
             diffuseColor.rgb *= mix(1., k < 40.5 ? .84 : k < 41.5 ? .95 : 1.04, vLandW);
             diffuseColor.rgb = mix(diffuseColor.rgb, k < 41.5 ? sage : diffuseColor.rgb * .7, sp * vLandW * mix(.06, .4, fd));
             if (k < 40.5) diffuseColor.rgb = mix(diffuseColor.rgb, pow(vec3(.36, .28, .2), vec3(2.2)), smoothstep(.6, .8, gwN(vGW.xz * .12 + 7.)) * .35 * vLandW);
+            // [plants phase 3] biological soil crust on the undisturbed sand between the shrubs: dark, lumpy, in patches a
+            // few metres across (pinnacled cyanobacteria and lichen — grey-black over the red), its lumps only up close
+            float crust = smoothstep(.55, .72, gwN(vGW.xz * .18 + 31.)) * (k < 41.5 ? 1. : .4);
+            float lump = mix(.75, gwN(vGW.xz * 6.) * .5 + gwH(floor(vGW.xz * 9.)) * .5, fd);
+            diffuseColor.rgb = mix(diffuseColor.rgb, pow(vec3(.27, .24, .21), vec3(2.2)) * (.8 + .4 * lump), crust * .55 * vLandW);
           }
           #endif
           #ifdef NYGRASS
