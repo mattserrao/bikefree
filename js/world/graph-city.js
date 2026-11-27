@@ -686,6 +686,13 @@ export class GraphCity {
     this.forest.tick(this.world.camera);
     this.oldGrowth?.tick(this.world.camera, time);
     if ((this._lf = (this._lf || 0) + 1) % 8) return;
+    this.lods(cam);
+  }
+  /** The tiles' near / far pieces and the building kit's detail shown for the camera at `cam` (tick: every 8th frame).
+   *  A chunk built since the last pass keeps its meshes' defaults (the kit's detail shown at any distance) until the
+   *  next: a still drawn straight after streaming (tools/snap_pgh.mjs) calls this first, or what it shows depends on
+   *  which frame the last chunk landed in (the guard's pgh:oakland, 2.5–5 % of pixels run to run, 27 Nov). */
+  lods(cam) {
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.71;
       for (const m of t.near) m.visible = d < (m.userData.lodM || this.q.treeNear) && !(d < m.userData.lodMin) && (this.gfx.life || !/^(Parked cars|Animals)/.test(m.name));
