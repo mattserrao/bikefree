@@ -1059,8 +1059,13 @@ export class CityScene {
    * posts over the sidewalk. b.falseFront: the street face (graph-city _frontsOf). Merged into the chunk's one mesh.
    */
   _falseFront(M, b, ground, y1, seed, base) {
-    const f = b.falseFront, len = f.len, mx = f.mx, mz = f.mz, nx = f.nx, nz = f.nz, yaw = f.yaw;
-    if (len < 5 || b.h > 11) return;
+    if (b.h > 11) return;
+    const parts = b.falseFront.parts?.length ? b.falseFront.parts : [b.falseFront];
+    parts.forEach((f, k) => this._falseFrontPart(M, b, f, ground, y1, seed, base, k));
+  }
+  _falseFrontPart(M, b, f, ground, y1, seed, base, part) {
+    const len = f.len, mx = f.mx, mz = f.mz, nx = f.nx, nz = f.nz, yaw = f.yaw;
+    if (len < 2) return;
     const r = (k) => hash(seed * 131 + k * 17.3);
     const g = this.landscape.heightAt(mx + nx * 2, mz + nz * 2);
     const face = base.clone().lerp(new THREE.Color(['#e9dcc0', '#c9a27a', '#b5c0b0', '#d8c7a0', '#a65a3e'][Math.floor(r(1) * 5)]), .55);
@@ -1068,14 +1073,14 @@ export class CityScene {
     // the false front: up 1.4–2.6 m past the roof, flat or stepped, a cornice on top
     const ffH = 1.4 + r(2) * 1.2, top = y1 + ffH;
     M.color(face).box(mx + nx * .1, y1 - .3, mz + nz * .1, len + .2, ffH + .3, .25, yaw);
-    if (r(3) < .45) M.box(mx + nx * .1, top, mz + nz * .1, len * (.35 + r(4) * .2), .6 + r(5) * .4, .25, yaw);
+    if (r(3) < .45 && len > 6 && part === 0) M.box(mx + nx * .1, top, mz + nz * .1, len * (.35 + r(4) * .2), .6 + r(5) * .4, .25, yaw);
     const trim = face.clone().multiplyScalar(.62);
     M.color(trim).box(mx + nx * .2, top - .22, mz + nz * .2, len + .5, .24, .5, yaw);
     M.box(mx + nx * .16, y1 - .45, mz + nz * .16, len + .3, .2, .36, yaw);   // (the sign band's lower moulding)
     // the porch: a wood roof on posts over the walk, 2.2–2.8 m deep
     if (r(6) < .8) {
       const d = 2.2 + r(7) * .6, ph = Math.min(3.2, Math.max(2.7, y1 - ground - .6)), wood = new THREE.Color(r(8) < .5 ? '#7a5a3e' : '#8a7a66');
-      const tx = -nz, tz = nx, n = Math.max(2, Math.round(len / 3.2));
+      const tx = -nz, tz = nx, n = Math.max(1, Math.round(len / 3.2));
       M.color(wood).box(mx + nx * d / 2, g + ph, mz + nz * d / 2, len, .16, d + .1, yaw);
       for (let k = 0; k <= n; k++) {
         const s = (k / n - .5) * (len - .3);

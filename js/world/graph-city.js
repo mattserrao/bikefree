@@ -132,6 +132,7 @@ export const KIT_STYLES = { cny: [{ preset: 'cny-village', kinds: ['village-hous
     { preset: 'kanab-western', kinds: ['house', 'rowhouse'] }] };
 const ROADS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'alley']);
 const MAIN = new Set(['primary', 'secondary', 'tertiary']);
+const ROAD_RANK = { primary: 3, secondary: 2, tertiary: 1 };   // (Kanab's false fronts: which street a block faces)
 const POINT_FN = { signal: 'signal', bus_stop: 'busSign', bench: 'bench', hydrant: 'hydrant', bike_rack: 'bikeRack', waste: 'waste', picnic: 'picnic',
   post_box: 'postBox', drinking: 'drinking', bollard: 'bollard', shelter: 'shelter', stop_sign: 'stopSign', bike_share: 'bikeRack' };
 const u8 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0)).buffer;
@@ -1602,12 +1603,29 @@ export class GraphCity {
       if (len < 5) continue;
       const tx = (c.x - a.x) / len, tz = (c.z - a.z) / len, mx = (a.x + c.x) / 2, mz = (a.z + c.z) / 2;
       let nx = tz, nz = -tx; if ((mx - b.cx) * nx + (mz - b.cz) * nz < 0) { nx = -nx; nz = -nz; }
-      const r = this.roadNear(mx + nx * 2, mz + nz * 2, maxD);
-      if (!r || !ROADS.has(r.e.kind) || r.e.kind === 'alley') continue;
+      // (walk out along the wall's normal: roadNear only looks a cell or so round its point, and a block can stand
+      //  40 m back behind its parking lot)
+      let r = null;
+      for (let k = 2; k <= maxD && !r; k += 10) { const q = this.roadNear(mx + nx * k, mz + nz * k, 8); if (q && ROADS.has(q.e.kind) && q.e.kind !== 'alley') r = q; }
+      if (!r) continue;
       const dx = r.px - mx, dz = r.pz - mz, d = Math.hypot(dx, dz);
-      if (d < 1 || (dx * nx + dz * nz) / d < .7) continue;
-      const score = d - len * .3 - (MAIN.has(r.e.kind) ? 15 : 0);   // (the main street's side before a side street's)
-      if (score < bestD) { bestD = score; best = { i, a, c, len, tx, tz, nx, nz, mx, mz, yaw: Math.atan2(nx, nz) }; }
+      if (d < 1 || (dx * nx + dz * nz) / d < .7 || Math.abs(r.dx * tx + r.dz * tz) < .75) continue;   // (facing it, and running along it)
+      // (user, 26 Nov: the false front on the main street's side — the bigger the street and the longer the wall facing
+      //  it, the likelier the front: a primary beats a secondary beats a side street, whatever the setback)
+      const score = d - len * .6 - (ROAD_RANK[r.e.kind] || 0) * 25;
+      if (score < bestD) { bestD = score; best = { i, a, c, len, tx, tz, nx, nz, mx, mz, yaw: Math.atan2(nx, nz), road: r.e.kind, street: r.e.name }; }
+    }
+    if (!best) return null;
+    // (a traced footprint's street wall comes in pieces: every edge in line with the chosen one — same facing, on its
+    //  line within 2.5 m — carries the false front too, so it spans the whole frontage)
+    best.parts = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], c = ring[(i + 1) % ring.length], len = Math.hypot(c.x - a.x, c.z - a.z);
+      if (len < 2) continue;
+      const tx = (c.x - a.x) / len, tz = (c.z - a.z) / len, mx = (a.x + c.x) / 2, mz = (a.z + c.z) / 2;
+      let nx = tz, nz = -tx; if ((mx - b.cx) * nx + (mz - b.cz) * nz < 0) { nx = -nx; nz = -nz; }
+      if (nx * best.nx + nz * best.nz < .97 || Math.abs((mx - best.mx) * best.nx + (mz - best.mz) * best.nz) > 2.5) continue;
+      best.parts.push({ len, nx, nz, mx, mz, yaw: Math.atan2(nx, nz) });
     }
     return best;
   }
