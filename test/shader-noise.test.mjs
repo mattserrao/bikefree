@@ -11,7 +11,9 @@ const TOOLBOX = new URL('../js/world/toolbox/', import.meta.url).pathname;
 const files = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? files(p) : p.endsWith('.js') ? [p] : []; });
 // ground-cover.js belongs to another area; race-day's crowd hash wraps its input (mod 1009) and the post pass hashes
 // screen uv: both stay small
-const SKIP = ['landscape/ground-cover.js', 'life/race-day.js', 'atmosphere/post.js'];
+// materials/graph-road.js: the graph maps' roads and ground keep their own gwH / gwN (GW_NOISE_GLSL) — moved there from
+// graph-world.js unchanged (W13, 27 Nov); swapping the hash would move every grain of those maps: a look change, not a refactor
+const SKIP = ['landscape/ground-cover.js', 'life/race-day.js', 'atmosphere/post.js', 'materials/graph-road.js'];
 const src = Object.fromEntries(files(TOOLBOX).map((f) => [f.slice(TOOLBOX.length), readFileSync(f, 'utf8')]).filter(([f]) => !SKIP.includes(f)));
 const f32 = Math.fround, fract = (x) => f32(x - Math.floor(x));
 

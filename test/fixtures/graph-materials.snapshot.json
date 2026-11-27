@@ -1,0 +1,1802 @@
+{
+ "road:000": {
+  "key": "pgh-road-surface-13",
+  "defines": {},
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:000": {
+  "key": "pgh-road-surface-13SHADERPAINTPARKROAD",
+  "defines": {
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road:001": {
+  "key": "pgh-road-surface-13-spillSPILL",
+  "defines": {
+   "SPILL": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:001": {
+  "key": "pgh-road-surface-13-spillSPILLSHADERPAINTPARKROAD",
+  "defines": {
+   "SPILL": "",
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road:010": {
+  "key": "pgh-road-surface-13-ny1NYWEAR",
+  "defines": {
+   "NYWEAR": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:010": {
+  "key": "pgh-road-surface-13-ny1NYWEARSHADERPAINTPARKROAD",
+  "defines": {
+   "NYWEAR": "",
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road:011": {
+  "key": "pgh-road-surface-13-ny1-spillSPILLNYWEAR",
+  "defines": {
+   "SPILL": "",
+   "NYWEAR": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:011": {
+  "key": "pgh-road-surface-13-ny1-spillSPILLNYWEARSHADERPAINTPARKROAD",
+  "defines": {
+   "SPILL": "",
+   "NYWEAR": "",
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road:100": {
+  "key": "pgh-road-surface-13-lowLOWQ",
+  "defines": {
+   "LOWQ": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:100": {
+  "key": "pgh-road-surface-13-lowLOWQSHADERPAINTPARKROAD",
+  "defines": {
+   "LOWQ": "",
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road:101": {
+  "key": "pgh-road-surface-13-low-spillSPILLLOWQ",
+  "defines": {
+   "SPILL": "",
+   "LOWQ": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:101": {
+  "key": "pgh-road-surface-13-low-spillSPILLLOWQSHADERPAINTPARKROAD",
+  "defines": {
+   "SPILL": "",
+   "LOWQ": "",
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "20a843f46c643d87778f76b6",
+  "vsLen": 1324,
+  "fsLen": 21874,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road:110": {
+  "key": "pgh-road-surface-13-low-ny1LOWQNYWEAR",
+  "defines": {
+   "LOWQ": "",
+   "NYWEAR": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:110": {
+  "key": "pgh-road-surface-13-low-ny1LOWQNYWEARSHADERPAINTPARKROAD",
+  "defines": {
+   "LOWQ": "",
+   "NYWEAR": "",
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road:111": {
+  "key": "pgh-road-surface-13-low-ny1-spillSPILLLOWQNYWEAR",
+  "defines": {
+   "SPILL": "",
+   "LOWQ": "",
+   "NYWEAR": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "road+look:111": {
+  "key": "pgh-road-surface-13-low-ny1-spillSPILLLOWQNYWEARSHADERPAINTPARKROAD",
+  "defines": {
+   "SPILL": "",
+   "LOWQ": "",
+   "NYWEAR": "",
+   "SHADERPAINT": "",
+   "PARKROAD": ""
+  },
+  "vs": "f1f63419fef5043dc008d869",
+  "fs": "a2a6d59b9966747a6f5ccf2b",
+  "vsLen": 1324,
+  "fsLen": 29362,
+  "uniforms": [
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*",
+   "uRoadTone*",
+   "uRoadLeaves*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -1,
+   "pou": -3,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "paintWorn": {
+  "key": "graph-paint-worn-1",
+  "defines": {
+   "STANDARD": ""
+  },
+  "vs": "591a2c2d13233e392bd11b9c",
+  "fs": "b81a30badcf15aacf46120d9",
+  "vsLen": 1275,
+  "fsLen": 4894,
+  "uniforms": [],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": true,
+   "pof": -2,
+   "pou": -2,
+   "roughness": 0.6,
+   "env": 0.7
+  }
+ },
+ "side:0": {
+  "key": "onBeforeCompile(){}|graph-side-surf1",
+  "defines": {
+   "STANDARD": ""
+  },
+  "vs": "5ed3380339abd9433e1f473d",
+  "fs": "5cb8c052d8d543581ee79b65",
+  "vsLen": 1275,
+  "fsLen": 5013,
+  "uniforms": [
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "side:1": {
+  "key": "onBeforeCompile(){}",
+  "defines": {
+   "STANDARD": ""
+  },
+  "vs": "d3257679d2240f665094a138",
+  "fs": "f757cebeec471546ef68663c",
+  "vsLen": 1208,
+  "fsLen": 4122,
+  "uniforms": [],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 2,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.9,
+   "env": 0.55
+  }
+ },
+ "ground:0000": {
+  "key": "pgh-ground-land-23",
+  "defines": {},
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0000": {
+  "key": "pgh-ground-land-23",
+  "defines": {
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:0001": {
+  "key": "pgh-ground-land-23-desert",
+  "defines": {
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0001": {
+  "key": "pgh-ground-land-23-desert",
+  "defines": {
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:0010": {
+  "key": "pgh-ground-land-23",
+  "defines": {
+   "SOFTCOVER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0010": {
+  "key": "pgh-ground-land-23",
+  "defines": {
+   "SOFTCOVER": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:0011": {
+  "key": "pgh-ground-land-23-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0011": {
+  "key": "pgh-ground-land-23-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:0100": {
+  "key": "pgh-ground-land-23-ny2",
+  "defines": {
+   "NYGRASS": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0100": {
+  "key": "pgh-ground-land-23-ny2",
+  "defines": {
+   "NYGRASS": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:0101": {
+  "key": "pgh-ground-land-23-ny2-desert",
+  "defines": {
+   "NYGRASS": "",
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0101": {
+  "key": "pgh-ground-land-23-ny2-desert",
+  "defines": {
+   "NYGRASS": "",
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:0110": {
+  "key": "pgh-ground-land-23-ny2",
+  "defines": {
+   "SOFTCOVER": "",
+   "NYGRASS": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0110": {
+  "key": "pgh-ground-land-23-ny2",
+  "defines": {
+   "SOFTCOVER": "",
+   "NYGRASS": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:0111": {
+  "key": "pgh-ground-land-23-ny2-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "NYGRASS": "",
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:0111": {
+  "key": "pgh-ground-land-23-ny2-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "NYGRASS": "",
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1000": {
+  "key": "pgh-ground-land-23-low",
+  "defines": {
+   "LOWQ": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1000": {
+  "key": "pgh-ground-land-23-low",
+  "defines": {
+   "LOWQ": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1001": {
+  "key": "pgh-ground-land-23-low-desert",
+  "defines": {
+   "LOWQ": "",
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1001": {
+  "key": "pgh-ground-land-23-low-desert",
+  "defines": {
+   "LOWQ": "",
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1010": {
+  "key": "pgh-ground-land-23-low",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1010": {
+  "key": "pgh-ground-land-23-low",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1011": {
+  "key": "pgh-ground-land-23-low-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": "",
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1011": {
+  "key": "pgh-ground-land-23-low-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": "",
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1100": {
+  "key": "pgh-ground-land-23-low-ny2",
+  "defines": {
+   "LOWQ": "",
+   "NYGRASS": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1100": {
+  "key": "pgh-ground-land-23-low-ny2",
+  "defines": {
+   "LOWQ": "",
+   "NYGRASS": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1101": {
+  "key": "pgh-ground-land-23-low-ny2-desert",
+  "defines": {
+   "LOWQ": "",
+   "NYGRASS": "",
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1101": {
+  "key": "pgh-ground-land-23-low-ny2-desert",
+  "defines": {
+   "LOWQ": "",
+   "NYGRASS": "",
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1110": {
+  "key": "pgh-ground-land-23-low-ny2",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": "",
+   "NYGRASS": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1110": {
+  "key": "pgh-ground-land-23-low-ny2",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": "",
+   "NYGRASS": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground:1111": {
+  "key": "pgh-ground-land-23-low-ny2-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": "",
+   "NYGRASS": "",
+   "DESERT": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "b49abc87ebbe0ff62c4e163b",
+  "vsLen": 1401,
+  "fsLen": 34298,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ },
+ "ground+litter:1111": {
+  "key": "pgh-ground-land-23-low-ny2-desert",
+  "defines": {
+   "SOFTCOVER": "",
+   "LOWQ": "",
+   "NYGRASS": "",
+   "DESERT": "",
+   "LITTER": ""
+  },
+  "vs": "dcc5de081bf8318dcc6360c3",
+  "fs": "ef76589591ddbebce9b0acd3",
+  "vsLen": 1401,
+  "fsLen": 37001,
+  "uniforms": [
+   "uLand",
+   "uLandBox",
+   "uLandOn",
+   "uRoots",
+   "uRootN",
+   "bfCanopyTex*",
+   "bfCanopyBox*",
+   "bfCanopyK*",
+   "uPbrA*",
+   "uPbrN*",
+   "uPbrOn*",
+   "uLitter*",
+   "uCloudT*",
+   "uSurf*",
+   "uSurfSun*"
+  ],
+  "mat": {
+   "type": "MeshStandardMaterial",
+   "side": 0,
+   "vertexColors": true,
+   "polygonOffset": false,
+   "pof": 0,
+   "pou": 0,
+   "roughness": 0.95,
+   "env": 0.85
+  }
+ }
+}

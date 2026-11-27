@@ -4,7 +4,8 @@
 // Now it waits, the menu offers "Update ready · Reload", and tabs from before it activated keep their own revision's
 // files until they're gone. A8: app files were network first with no timeout (slow starts on weak Wi-Fi with
 // everything cached): now cache first from the revision's own cache (network first only on localhost).
-// Runs sw.js in a sandbox with in-memory caches and fake clients (as test/sw.test.mjs).
+// Runs sw.js in a sandbox with in-memory caches and fake clients (as test/sw.test.mjs). (The menu's Update ready bar
+// is driven in a DOM in test/dom-ride.test.mjs.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -195,39 +196,3 @@ test('A7: Reload tells the waiting worker to take over and reloads when it has; 
   assert.equal(r2, 1);   // (only our own counter: applyUpdate added no reload)
 });
 
-test('A7: the menu\'s Update ready prompt waits for a ride in progress; hidden with no ride, it takes over quietly', () => {
-  const src = readFileSync(new URL('../js/app/offline-ui.js', import.meta.url), 'utf8');
-  const i = src.indexOf('function updatePrompt(');
-  const updatePrompt = new Function(`${src.slice(i, src.indexOf('\n}\n', i) + 2)}; return updatePrompt;`)();
-  const el = () => Object.assign(new EventTarget(), { hidden: true, textContent: '', disabled: false });
-  const bar = el(), text = el(), btn = el();
-  const session = { hasRide: true };
-  const applied = [];
-  const p = updatePrompt(bar, text, btn, session, (w, reload) => applied.push([w, reload]), 'RELOAD');
-  assert.ok(bar.hidden);
-  p.ready('W');
-  assert.ok(!bar.hidden);
-  assert.match(text.textContent, /after this ride/);
-  assert.ok(btn.disabled);
-  btn.dispatchEvent(new Event('click'));
-  p.hidden();
-  assert.deepEqual(applied, [], 'took over during a ride');
-  session.hasRide = false; p.render();
-  assert.equal(text.textContent, 'Update ready');
-  assert.ok(!btn.disabled);
-  btn.dispatchEvent(new Event('click'));
-  btn.dispatchEvent(new Event('click'));
-  assert.deepEqual(applied, [['W', 'RELOAD']]);
-  // another prompt: the page hidden with no ride → quietly, no reload
-  const q = updatePrompt(el(), el(), el(), { hasRide: false }, (w, reload) => applied.push([w, reload]), 'RELOAD');
-  q.hidden();
-  assert.equal(applied.length, 1, 'nothing waiting: nothing applied');
-  q.ready('W2'); q.hidden();
-  assert.deepEqual(applied[1], ['W2', null]);
-  // and the app wires it: registerServiceWorker(log, onUpdateReady), hidden on visibilitychange
-  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
-  assert.match(app, /registerServiceWorker\(log, onUpdateReady\)/);
-  assert.match(src, /visibilitychange', \(\) => \{ if \(document\.hidden\) update\.hidden\(\); \}/);
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  for (const id of ['updateBar', 'updateText', 'updateBtn']) assert.match(html, new RegExp(`id="${id}"`));
-});

@@ -1,0 +1,47 @@
+{
+ "pgh": {
+  "nodes": 1955,
+  "trims": 3357,
+  "plan": "e6d786cc9eb3008deeb60aa1",
+  "curvePoints": "a65609b4356cbf06ead009d0",
+  "curves": "56f06a85110d5c685f4d206b",
+  "roadHash": "7e5cd82ffcb557fc7565c858",
+  "roadProbes": "54b170abd7a5ab9d4edcb33d"
+ },
+ "cny": {
+  "nodes": 249,
+  "trims": 387,
+  "plan": "b4699aad580c3db7f319bf2b",
+  "curvePoints": "227db23227e98f3b75052855",
+  "curves": "e1f6c751508c87058198fd48",
+  "roadHash": "250fb7190e8b639bba51de23",
+  "roadProbes": "9a4775bf31205af8ad4b70ea"
+ },
+ "skan": {
+  "nodes": 319,
+  "trims": 503,
+  "plan": "3158ad7b6f867e6206976772",
+  "curvePoints": "a54bbc2cfed7db0ff1ec62e2",
+  "curves": "a9dbb963e8b529366b94e74d",
+  "roadHash": "e13774bb3897bf82ddc21ba5",
+  "roadProbes": "15ef540223a37a4cfbaefabe"
+ },
+ "nyc": {
+  "nodes": 208,
+  "trims": 381,
+  "plan": "b1094a53f757a6fb0a2f2399",
+  "curvePoints": "26d3e0a4f6a2ef57dab1eaa5",
+  "curves": "3eec15e9bd41bad89734132e",
+  "roadHash": "da0323ff5deefadf528a1e9f",
+  "roadProbes": "e1a0d0fcca278e5182979e43"
+ },
+ "outwest": {
+  "nodes": 268,
+  "trims": 432,
+  "plan": "da97a1f2f2afd5aa8670b667",
+  "curvePoints": "d1aff6dd99f16c3c4f628181",
+  "curves": "ac6965c8032716b16fb06bc1",
+  "roadHash": "4f2bc855cd8639ab8bcfc7df",
+  "roadProbes": "d6ef253a877cdecfa2e62c59"
+ }
+}
