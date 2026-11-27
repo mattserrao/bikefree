@@ -91,8 +91,18 @@ export async function auditFrame(w, { frames = 12, overdrawScale = 4 } = {}) {
     const ts = []; let now = performance.now();
     const raf = window.requestAnimationFrame; window.requestAnimationFrame = () => 0;
     const run = w.running; w.running = true;
+    // (the update moves the camera to the rider's chase; what sorts itself round the camera — the trees' tiers, the
+    //  ground cover's tufts, the far land's hole — is given the shot's camera instead, or the picture after the audit
+    //  showed them sorted round the rider: every shrub and tuft by the shot hidden — 27 Nov, plants phase 5)
+    const shot = cam.clone(), F = w.city?.forest, G = w.groundCover, FT = w.far, wraps = [];
+    const wrap = (o, k, fn) => { if (!o?.[k]) return; const f = o[k]; wraps.push([o, k, f]); o[k] = fn(f.bind(o)); };
+    wrap(F, 'tick', (f) => () => f(shot)); wrap(G, 'tick', (f) => () => f(shot.position)); wrap(FT, 'tick', (f) => (c, o) => f(shot, o));
     for (let k = 0; k < frames; k++) { now += 1000 / 60; const t0 = performance.now(); try { w._frame(now); } catch (e) { out.cpuError = String(e); break; } ts.push(performance.now() - t0); }
     w.running = run; window.requestAnimationFrame = raf; w._draw = draw;
+    for (const [o, k, f] of wraps) o[k] = f;
+    // (and settled: the 12 timed frames are a fifth of a second, a tier's fade is longer — the screenshot would catch
+    //  every newly sorted plant half dissolved)
+    if (F?.tiles) { for (const L of F.tiles.values()) for (const t of L) t.ts = -1e9; F._at = null; F.tick(shot); }
     cam.position.copy(keep.p); cam.quaternion.copy(keep.q); cam.fov = keep.fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); w.p = keep.p0;
     ts.sort((a, b) => a - b);
     out.cpuMs = +(ts[Math.floor(ts.length / 2)] || 0).toFixed(2);

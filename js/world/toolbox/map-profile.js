@@ -40,10 +40,14 @@ export const PROFILE_PRESETS = {
     // Kanab's old town (user, 26 Nov): a third of its houses the pioneer type; two storeys at most unless named; false fronts
     farTerrain: true, classifyHomes: 'town-core', townCore: { lat: 37.0475, lon: -112.5266, r: 650, share: .35 }, maxBuildingM: 10.5, falseFronts: true,
     treeMix: { woods: [['juniper', 60], ['pinyon', 40]], wet: [['cottonwood', 1]], hedge: [['juniper', 70], ['cottonwood', 30]],
-      // (town, user 26 Nov: cottonwood, Arizona ash, Russian olive, juniper)
-      yard: [['cottonwood', 30], ['aash', 25], ['rolive', 20], ['juniper', 20], ['pinyon', 5]], street: [['cottonwood', 40], ['aash', 40], ['rolive', 20]],
+      // (town, user 26 Nov: cottonwood, Arizona ash, Russian olive, juniper; plants plan 27 Nov: Siberian elm, poplars)
+      yard: [['cottonwood', 25], ['aash', 20], ['rolive', 15], ['selm', 20], ['juniper', 15], ['pinyon', 5]], street: [['cottonwood', 30], ['aash', 30], ['selm', 25], ['rolive', 15]],
       pasture: [['juniper', 70], ['cottonwood', 30]],
-      orn: [['rolive', 40], ['juniper', 45], ['pinyon', 15]], arbor: [['juniper', 1]], osm: [['cottonwood', 50], ['aash', 50]] },
+      orn: [['rolive', 30], ['juniper', 30], ['poplar', 30], ['pinyon', 10]], arbor: [['poplar', 1]], osm: [['cottonwood', 50], ['aash', 50]],
+      // [plants phase 4] the desert's communities (graph-city.js DESERT_COMMUNITIES): the creek's thicket, the upper
+      // benches with oak and mahogany, the plateau's ponderosa, and the dead
+      riparian: [['cottonwood', 30], ['tamarisk', 45], ['cwillow', 25]], upper: [['pinyon', 45], ['juniper', 25], ['gambel', 20], ['mahogany', 10]],
+      ponderosa: [['ponderosa', 70], ['gambel', 20], ['pinyon', 10]], dead: [['deadpj', 1]] },
     // the desert's fall golden hour: a lower, redder sun, warm dust in the air, red light bounced up off the rock
     wind: [.75, .66], windK: 1.25,   // (the afternoon wind up the desert from the south-west)
     // [evidence 27 Nov] a clear sky with the sun 11° up gives level ground about 1.5–2× as much direct light as sky light
