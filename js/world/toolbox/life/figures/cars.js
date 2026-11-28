@@ -398,6 +398,51 @@ export class ParkedCars {
     }
     return out;
   }
+
+  /**
+   * [triangle audit, 27 Nov] Detail per car, not per tile: one InstancedMesh per kind at each LOD ('hi', 'lo', 'far'),
+   * each with room for all its kind's cars; update(cam, hiM, loM) puts each car in the LOD for its own distance
+   * (rewriting a kind's meshes only when one of its cars changes band). allFar() for a tile out of range.
+   */
+  lodSet(material, name = 'Parked cars') {
+    const by = new Map();
+    for (const c of this.list) { const k = `${c.kind}|${c.rack ? 1 : 0}`; if (!by.has(k)) by.set(k, []); by.get(k).push(c); }
+    const groups = [], meshes = [], m4 = new THREE.Matrix4(), col = new THREE.Color();
+    let cx = 0, cz = 0, cy = 0; for (const c of this.list) { cx += c.x; cy += c.y; cz += c.z; }
+    const n = this.list.length || 1; cx /= n; cy /= n; cz /= n;
+    let r = 0; for (const c of this.list) r = Math.max(r, Math.hypot(c.x - cx, c.y - cy, c.z - cz));
+    const sphere = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), r + 4);
+    for (const [key, list] of by) {
+      const [kind, rk] = key.split('|'), mats = new Float32Array(list.length * 16), cols = new Float32Array(list.length * 3);
+      list.forEach((c, i) => { m4.makeRotationY(c.yaw).setPosition(c.x, c.y, c.z).toArray(mats, i * 16); col.set(c.paint).toArray(cols, i * 3); });
+      const ims = ['hi', 'lo', 'far'].map((lod) => {
+        const im = new THREE.InstancedMesh(carGeometry(kind, lod, { rack: rk === '1' && lod !== 'far' }), material, list.length);
+        im.setColorAt(0, col);   // (makes the colour buffer)
+        im.count = 0; im.boundingSphere = sphere.clone();
+        im.userData.shared = true; im.castShadow = lod !== 'far'; im.receiveShadow = true; im.name = `${name} ${lod} ${kind}${rk === '1' ? ' rack' : ''}`;
+        meshes.push(im);
+        return im;
+      });
+      groups.push({ list, mats, cols, ims, band: new Uint8Array(list.length).fill(255) });
+    }
+    const write = (g, bandOf) => {
+      let changed = false;
+      for (let i = 0; i < g.list.length; i++) { const b = bandOf(g.list[i]); if (b !== g.band[i]) { g.band[i] = b; changed = true; } }
+      if (!changed) return;
+      const k = [0, 0, 0];
+      for (let i = 0; i < g.list.length; i++) {
+        const b = g.band[i], im = g.ims[b], j = k[b]++;
+        im.instanceMatrix.array.set(g.mats.subarray(i * 16, i * 16 + 16), j * 16);
+        im.instanceColor.array.set(g.cols.subarray(i * 3, i * 3 + 3), j * 3);
+      }
+      g.ims.forEach((im, b) => { im.count = k[b]; im.visible = k[b] > 0; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; });
+    };
+    return {
+      meshes, sphere,
+      update(cam, hiM, loM) { for (const g of groups) write(g, (c) => { const d = Math.hypot(c.x - cam.x, c.z - cam.z); return d < hiM ? 0 : d < loM ? 1 : 2; }); },
+      allFar() { for (const g of groups) write(g, () => 2); },
+    };
+  }
 }
 
 const STATIC = new Map();
