@@ -154,54 +154,79 @@
    "tags": [
     "hilly",
     "views",
-    "tunnel"
+    "tunnel",
+    "gravel"
    ],
-   "outAndBack": true,
-   "note": "From the summit down past Hoodoo Rim's orange spires, through the galleried Kanab Creek Tunnel to the East Fork at Mt Carmel, and back up through it all",
+   "note": "From the summit beside Hoodoo Rim down through the galleried Kanab Creek Tunnel, then back up the BLM 48 track above it and over County Road 43: a loop, not the same road twice",
    "way": [
     {
      "near": [
-      37.12073,
-      -112.57478
-     ],
-     "on": "US 89"
-    },
-    {
-     "near": [
-      37.15693,
-      -112.62378
-     ],
-     "prefer": [
-      "US 89",
-      "Street"
+      37.12958,
+      -112.59668
      ]
     },
     {
      "near": [
-      37.12073,
-      -112.57478
+      37.14597,
+      -112.62498
      ],
-     "on": "US 89",
      "prefer": [
       "US 89"
      ]
+    },
+    {
+     "near": [
+      37.12736,
+      -112.59978
+     ],
+     "prefer": [
+      "BLM 48",
+      "Trail"
+     ]
+    },
+    {
+     "near": [
+      37.1265,
+      -112.59335
+     ],
+     "prefer": [
+      "BLM 45F",
+      "BLM 45"
+     ]
+    },
+    {
+     "near": [
+      37.12736,
+      -112.59257
+     ],
+     "prefer": [
+      "County Road 43"
+     ]
+    },
+    {
+     "near": [
+      37.12958,
+      -112.59668
+     ],
+     "prefer": [
+      "Street"
+     ],
+     "avoid": [
+      "US 89"
+     ]
     }
-   ],
-   "kindCost": {
-    "path": 10
-   }
+   ]
   },
   {
    "id": "ow-coral-pink",
-   "name": "Arch Garden & Coral Pink Dunes",
+   "name": "Coral Pink Dunes Loop",
    "tags": [
     "rolling",
     "long",
-    "arches",
-    "dunes"
+    "dunes",
+    "gravel"
    ],
-   "outAndBack": true,
-   "note": "Off the canyon road onto Hancock Road: rolling through juniper benches past the Arch Garden to the Coral Pink Sand Dunes, along the dunes and back",
+   "note": "Hancock Road to the Coral Pink Sand Dunes: along the dunes road, a loop past its end on the BLM 33A and 32B tracks, back through the dunes on the Ford Road trail and Dune Access Road, home by County Road 43 and Hancock Road",
    "way": [
     {
      "near": [
@@ -211,11 +236,38 @@
     },
     {
      "near": [
-      37.07949,
+      37.0795,
       -112.64445
      ],
      "prefer": [
       "Hancock Road"
+     ]
+    },
+    {
+     "near": [
+      37.03784,
+      -112.68266
+     ],
+     "prefer": [
+      "Coral Pink Sand Dunes Road"
+     ]
+    },
+    {
+     "near": [
+      37.02238,
+      -112.70338
+     ],
+     "prefer": [
+      "BLM 33A"
+     ]
+    },
+    {
+     "near": [
+      37.03442,
+      -112.69407
+     ],
+     "prefer": [
+      "BLM 32B"
      ]
     },
     {
@@ -229,11 +281,46 @@
     },
     {
      "near": [
-      37.07949,
+      37.06475,
+      -112.64892
+     ],
+     "prefer": [
+      "Coral Pink Sand Dunes Road"
+     ]
+    },
+    {
+     "near": [
+      37.06924,
+      -112.64367
+     ],
+     "prefer": [
+      "Ford Road",
+      "Trail"
+     ]
+    },
+    {
+     "near": [
+      37.07039,
+      -112.64683
+     ],
+     "prefer": [
+      "Trail",
+      "Dune Access Road"
+     ]
+    },
+    {
+     "near": [
+      37.0795,
       -112.64445
      ],
      "prefer": [
       "Coral Pink Sand Dunes Road"
+     ],
+     "avoid": [
+      "County Road 43",
+      "BLM 66F",
+      "BLM 66G",
+      "BLM 66C"
      ]
     },
     {
@@ -243,12 +330,17 @@
      ],
      "prefer": [
       "Hancock Road"
+     ],
+     "avoid": [
+      "BLM 62H",
+      "BLM 66C",
+      "BLM 66A",
+      "TC1002",
+      "TC1003"
      ]
     }
    ],
-   "kindCost": {
-    "path": 10
-   }
+   "outAndBack": true
   },
   {
    "id": "ow-butte-valley",
@@ -335,25 +427,101 @@
   },
   {
    "id": "ow-johnson-canyon",
-   "name": "Johnson Canyon & the Movie Set",
+   "name": "Little Hollywood & the Old Adobe",
    "tags": [
-    "canyon",
     "western",
+    "rolling",
+    "gravel",
     "long"
    ],
-   "outAndBack": true,
-   "note": "Up Johnson Canyon between its red walls \u2014 a gentle climb all the way, past the old western movie set's false fronts \u2014 to the canyon's head, and back down",
+   "note": "From Kanab out US 89 east, round Bryce Canyon Way and Kaibab Trail, the BLM 105 tracks past the old adobe ruin, up Johnson Canyon Road to the movie set and back, home under the buttes on Rock Ledge, Red Cliffs and Pine Cliffs",
    "way": [
     {
      "near": [
-      37.04618,
-      -112.39715
+      37.04794,
+      -112.52671
      ]
     },
     {
      "near": [
-      37.07795,
-      -112.39253
+      37.0433,
+      -112.41505
+     ],
+     "prefer": [
+      "US 89",
+      "300 South",
+      "300 East"
+     ],
+     "avoid": [
+      "Grande Vermillion Avenue",
+      "Vermillion Avenue",
+      "East Zion Road",
+      "6400 East",
+      "Street"
+     ]
+    },
+    {
+     "near": [
+      37.0345,
+      -112.41964
+     ],
+     "prefer": [
+      "Bryce Canyon Way"
+     ]
+    },
+    {
+     "near": [
+      37.04119,
+      -112.4241
+     ],
+     "prefer": [
+      "Kaibab Trail"
+     ]
+    },
+    {
+     "near": [
+      37.04508,
+      -112.41542
+     ],
+     "prefer": [
+      "US 89",
+      "6400 East"
+     ],
+     "avoid": [
+      "Bryce Canyon Way"
+     ]
+    },
+    {
+     "near": [
+      37.04986,
+      -112.41582
+     ],
+     "prefer": [
+      "BLM 105H"
+     ]
+    },
+    {
+     "near": [
+      37.05333,
+      -112.39749
+     ],
+     "prefer": [
+      "BLM 105G"
+     ]
+    },
+    {
+     "near": [
+      37.0745,
+      -112.39149
+     ],
+     "prefer": [
+      "Johnson Canyon Road"
+     ]
+    },
+    {
+     "near": [
+      37.05333,
+      -112.39749
      ],
      "prefer": [
       "Johnson Canyon Road"
@@ -366,12 +534,53 @@
      ],
      "prefer": [
       "Johnson Canyon Road"
+     ]
+    },
+    {
+     "near": [
+      37.03928,
+      -112.50898
+     ],
+     "prefer": [
+      "US 89",
+      "Fairway Drive",
+      "Chinle Drive"
+     ],
+     "avoid": [
+      "Country Club Lane",
+      "K-Hill Trail",
+      "BLM 105H",
+      "Old Highway Road",
+      "East Zion Road",
+      "Vermillion Avenue",
+      "Grande Vermillion Avenue",
+      "6400 East",
+      "Street",
+      "Bryce Canyon Way",
+      "Kaibab Trail"
+     ]
+    },
+    {
+     "near": [
+      37.02983,
+      -112.52485
+     ],
+     "prefer": [
+      "South Hillside Drive",
+      "1100 South"
+     ]
+    },
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ],
+     "prefer": [
+      "100 East"
      ]
     }
    ],
-   "kindCost": {
-    "path": 10
-   }
+   "outAndBack": true
   },
   {
    "id": "ow-vermilion-rollers",
@@ -412,6 +621,385 @@
    "kindCost": {
     "path": 10
    },
+   "outAndBack": true
+  },
+  {
+   "id": "ow-arch-circuit",
+   "name": "Arch Garden Circuit",
+   "tags": [
+    "gravel",
+    "rolling",
+    "arches"
+   ],
+   "note": "Hancock Road to the Arch Garden: out on the BLM 62H track along the bench, round the arches on the BLM 66 tracks and County Road 43, and home down Hancock Road",
+   "way": [
+    {
+     "near": [
+      37.10981,
+      -112.55659
+     ]
+    },
+    {
+     "near": [
+      37.10406,
+      -112.58458
+     ],
+     "prefer": [
+      "Hancock Road"
+     ]
+    },
+    {
+     "near": [
+      37.0947,
+      -112.60298
+     ],
+     "prefer": [
+      "BLM 62H"
+     ],
+     "avoid": [
+      "Hancock Road"
+     ]
+    },
+    {
+     "near": [
+      37.0822,
+      -112.6264
+     ],
+     "prefer": [
+      "Hancock Road"
+     ]
+    },
+    {
+     "near": [
+      37.09182,
+      -112.6338
+     ],
+     "prefer": [
+      "BLM 66C",
+      "BLM 66H"
+     ]
+    },
+    {
+     "near": [
+      37.0795,
+      -112.6445
+     ],
+     "prefer": [
+      "BLM 66G",
+      "BLM 66F",
+      "County Road 43"
+     ]
+    },
+    {
+     "near": [
+      37.10981,
+      -112.55659
+     ],
+     "prefer": [
+      "Hancock Road"
+     ],
+     "avoid": [
+      "BLM 62H"
+     ]
+    }
+   ],
+   "outAndBack": true
+  },
+  {
+   "id": "ow-sand-spring",
+   "name": "Sand Spring Climb",
+   "tags": [
+    "climb",
+    "short",
+    "gravel"
+   ],
+   "note": "Off Hancock Road up the sandy Sand Spring track through the juniper to 1,914 m, and back down",
+   "way": [
+    {
+     "near": [
+      37.1073,
+      -112.57062
+     ]
+    },
+    {
+     "near": [
+      37.08485,
+      -112.60067
+     ],
+     "prefer": [
+      "Sand Spring Road"
+     ]
+    },
+    {
+     "near": [
+      37.1073,
+      -112.57062
+     ],
+     "prefer": [
+      "Sand Spring Road"
+     ]
+    }
+   ],
+   "outAndBack": true
+  },
+  {
+   "id": "ow-grand-loop",
+   "name": "Hoodoos, Tunnel & Back Tracks",
+   "tags": [
+    "long",
+    "hilly",
+    "tunnel",
+    "gravel"
+   ],
+   "note": "The big loop from Kanab: up US 89, onto the BLM 106 tracks through the hoodoo field, down through the galleried tunnel, back up the long BLM 48 track and County Road 43, and home down the canyon",
+   "way": [
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ]
+    },
+    {
+     "near": [
+      37.12073,
+      -112.57483
+     ],
+     "prefer": [
+      "US 89",
+      "300 West",
+      "Center Street"
+     ]
+    },
+    {
+     "near": [
+      37.12167,
+      -112.57079
+     ],
+     "prefer": [
+      "BLM 106"
+     ]
+    },
+    {
+     "near": [
+      37.12958,
+      -112.59668
+     ],
+     "prefer": [
+      "BLM 106L",
+      "BLM 106E",
+      "BLM 106Y"
+     ],
+     "avoid": [
+      "US 89"
+     ]
+    },
+    {
+     "near": [
+      37.14597,
+      -112.62498
+     ],
+     "prefer": [
+      "US 89"
+     ]
+    },
+    {
+     "near": [
+      37.12736,
+      -112.59978
+     ],
+     "prefer": [
+      "BLM 48",
+      "Trail"
+     ]
+    },
+    {
+     "near": [
+      37.1265,
+      -112.59335
+     ],
+     "prefer": [
+      "BLM 45F",
+      "BLM 45"
+     ]
+    },
+    {
+     "near": [
+      37.12736,
+      -112.59257
+     ],
+     "prefer": [
+      "County Road 43"
+     ]
+    },
+    {
+     "near": [
+      37.1267,
+      -112.58965
+     ],
+     "prefer": [
+      "Street"
+     ],
+     "avoid": [
+      "BLM 106L"
+     ]
+    },
+    {
+     "near": [
+      37.12073,
+      -112.57483
+     ],
+     "prefer": [
+      "US 89"
+     ]
+    },
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ],
+     "prefer": [
+      "US 89",
+      "300 West",
+      "Center Street"
+     ],
+     "avoid": [
+      "Hancock Road"
+     ]
+    }
+   ],
+   "outAndBack": true
+  },
+  {
+   "id": "ow-cliff-trails",
+   "name": "Vermilion Cliffs Trails",
+   "tags": [
+    "trail",
+    "climb",
+    "town"
+   ],
+   "note": "Kanab's own trails: K-Hill and Toms Canyon under the cliffs, then the Cliffs Trail climb, 190 m up to the rim and back, home through town",
+   "way": [
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ]
+    },
+    {
+     "near": [
+      37.04638,
+      -112.5068
+     ],
+     "prefer": [
+      "300 South",
+      "Fairway Drive",
+      "Country Club Lane",
+      "100 East",
+      "1100 South"
+     ],
+     "avoid": [
+      "K-Hill Trail",
+      "Toms Canyon Trail"
+     ]
+    },
+    {
+     "near": [
+      37.04729,
+      -112.51447
+     ],
+     "prefer": [
+      "K-Hill Trail"
+     ]
+    },
+    {
+     "near": [
+      37.05058,
+      -112.51825
+     ],
+     "prefer": [
+      "K-Hill Trail"
+     ]
+    },
+    {
+     "near": [
+      37.05665,
+      -112.51022
+     ],
+     "prefer": [
+      "Toms Canyon Trail"
+     ]
+    },
+    {
+     "near": [
+      37.05798,
+      -112.50872
+     ],
+     "prefer": [
+      "Weeping Rock Trail",
+      "Toms Canyon Trail"
+     ]
+    },
+    {
+     "near": [
+      37.05777,
+      -112.50837
+     ],
+     "prefer": [
+      "Toms Canyon Trail",
+      "Trail"
+     ]
+    },
+    {
+     "near": [
+      37.05793,
+      -112.51388
+     ],
+     "prefer": [
+      "Toms Canyon Road",
+      "Wildcat Lane",
+      "Rain Maker Road"
+     ],
+     "avoid": [
+      "Toms Canyon Trail",
+      "K-Hill Trail"
+     ]
+    },
+    {
+     "near": [
+      37.0628,
+      -112.50849
+     ],
+     "prefer": [
+      "Cliffs Trail"
+     ]
+    },
+    {
+     "near": [
+      37.05793,
+      -112.51388
+     ],
+     "prefer": [
+      "Cliffs Trail"
+     ]
+    },
+    {
+     "near": [
+      37.04794,
+      -112.52671
+     ],
+     "prefer": [
+      "El Valle Drive",
+      "Street",
+      "300 North",
+      "100 East"
+     ],
+     "avoid": [
+      "K-Hill Trail",
+      "Toms Canyon Trail",
+      "Country Club Lane"
+     ]
+    }
+   ],
    "outAndBack": true
   }
  ]

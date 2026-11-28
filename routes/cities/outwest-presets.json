@@ -29,24 +29,25 @@
   "tags": [
    "hilly",
    "views",
-   "tunnel"
+   "tunnel",
+   "gravel"
   ],
-  "note": "From the summit down past Hoodoo Rim's orange spires, through the galleried Kanab Creek Tunnel to the East Fork at Mt Carmel, and back up through it all",
-  "lengthM": 13890,
-  "climbM": 272
+  "note": "From the summit beside Hoodoo Rim down through the galleried Kanab Creek Tunnel, then back up the BLM 48 track above it and over County Road 43: a loop, not the same road twice",
+  "lengthM": 8400,
+  "climbM": 203
  },
  {
   "id": "ow-coral-pink",
-  "name": "Arch Garden & Coral Pink Dunes",
+  "name": "Coral Pink Dunes Loop",
   "tags": [
    "rolling",
    "long",
-   "arches",
-   "dunes"
+   "dunes",
+   "gravel"
   ],
-  "note": "Off the canyon road onto Hancock Road: rolling through juniper benches past the Arch Garden to the Coral Pink Sand Dunes, along the dunes and back",
-  "lengthM": 30960,
-  "climbM": 462
+  "note": "Hancock Road to the Coral Pink Sand Dunes: along the dunes road, a loop past its end on the BLM 33A and 32B tracks, back through the dunes on the Ford Road trail and Dune Access Road, home by County Road 43 and Hancock Road",
+  "lengthM": 38880,
+  "climbM": 544
  },
  {
   "id": "ow-butte-valley",
@@ -62,15 +63,16 @@
  },
  {
   "id": "ow-johnson-canyon",
-  "name": "Johnson Canyon & the Movie Set",
+  "name": "Little Hollywood & the Old Adobe",
   "tags": [
-   "canyon",
    "western",
+   "rolling",
+   "gravel",
    "long"
   ],
-  "note": "Up Johnson Canyon between its red walls — a gentle climb all the way, past the old western movie set's false fronts — to the canyon's head, and back down",
-  "lengthM": 6620,
-  "climbM": 40
+  "note": "From Kanab out US 89 east, round Bryce Canyon Way and Kaibab Trail, the BLM 105 tracks past the old adobe ruin, up Johnson Canyon Road to the movie set and back, home under the buttes on Rock Ledge, Red Cliffs and Pine Cliffs",
+  "lengthM": 42160,
+  "climbM": 279
  },
  {
   "id": "ow-vermilion-rollers",
@@ -82,5 +84,54 @@
   "note": "Out along US 89 east under the Vermilion Cliffs past Butte Valley to Johnson Canyon, and back",
   "lengthM": 28780,
   "climbM": 182
+ },
+ {
+  "id": "ow-arch-circuit",
+  "name": "Arch Garden Circuit",
+  "tags": [
+   "gravel",
+   "rolling",
+   "arches"
+  ],
+  "note": "Hancock Road to the Arch Garden: out on the BLM 62H track along the bench, round the arches on the BLM 66 tracks and County Road 43, and home down Hancock Road",
+  "lengthM": 21700,
+  "climbM": 388
+ },
+ {
+  "id": "ow-sand-spring",
+  "name": "Sand Spring Climb",
+  "tags": [
+   "climb",
+   "short",
+   "gravel"
+  ],
+  "note": "Off Hancock Road up the sandy Sand Spring track through the juniper to 1,914 m, and back down",
+  "lengthM": 10060,
+  "climbM": 234
+ },
+ {
+  "id": "ow-grand-loop",
+  "name": "Hoodoos, Tunnel & Back Tracks",
+  "tags": [
+   "long",
+   "hilly",
+   "tunnel",
+   "gravel"
+  ],
+  "note": "The big loop from Kanab: up US 89, onto the BLM 106 tracks through the hoodoo field, down through the galleried tunnel, back up the long BLM 48 track and County Road 43, and home down the canyon",
+  "lengthM": 35180,
+  "climbM": 616
+ },
+ {
+  "id": "ow-cliff-trails",
+  "name": "Vermilion Cliffs Trails",
+  "tags": [
+   "trail",
+   "climb",
+   "town"
+  ],
+  "note": "Kanab's own trails: K-Hill and Toms Canyon under the cliffs, then the Cliffs Trail climb, 190 m up to the rim and back, home through town",
+  "lengthM": 18200,
+  "climbM": 442
  }
 ]
